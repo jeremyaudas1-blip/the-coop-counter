@@ -2,16 +2,19 @@ import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-export const users = sqliteTable("users", {
+export const eggEntries = sqliteTable("egg_entries", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  username: text("username").notNull().unique(),
-  password: text("password").notNull(),
+  date: text("date").notNull(), // YYYY-MM-DD
+  count: integer("count").notNull(),
+  note: text("note"),
 });
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
+export const insertEggEntrySchema = createInsertSchema(eggEntries).omit({
+  id: true,
+}).extend({
+  count: z.number().min(0).max(100),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 });
 
-export type InsertUser = z.infer<typeof insertUserSchema>;
-export type User = typeof users.$inferSelect;
+export type InsertEggEntry = z.infer<typeof insertEggEntrySchema>;
+export type EggEntry = typeof eggEntries.$inferSelect;

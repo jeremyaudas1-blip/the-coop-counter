@@ -1,13 +1,14 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertEggEntrySchema } from "@shared/schema";
+import { insertEggEntrySchema, insertChickenSchema } from "@shared/schema";
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  // Get all entries (optionally filtered by year)
+  // ─── Egg Entries ───
+
   app.get("/api/entries", async (req, res) => {
     try {
       const year = req.query.year ? parseInt(req.query.year as string) : undefined;
@@ -23,7 +24,6 @@ export async function registerRoutes(
     }
   });
 
-  // Create a new entry
   app.post("/api/entries", async (req, res) => {
     try {
       const parsed = insertEggEntrySchema.safeParse(req.body);
@@ -32,10 +32,8 @@ export async function registerRoutes(
         return;
       }
 
-      // Check if entry already exists for this date
       const existing = await storage.getEntryByDate(parsed.data.date);
       if (existing) {
-        // Update existing entry
         const updated = await storage.updateEntry(existing.id, parsed.data);
         res.json(updated);
         return;
@@ -48,7 +46,6 @@ export async function registerRoutes(
     }
   });
 
-  // Update an entry
   app.patch("/api/entries/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
@@ -63,7 +60,6 @@ export async function registerRoutes(
     }
   });
 
-  // Delete an entry
   app.delete("/api/entries/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
@@ -71,6 +67,41 @@ export async function registerRoutes(
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ message: "Failed to delete entry" });
+    }
+  });
+
+  // ─── Chickens ───
+
+  app.get("/api/chickens", async (_req, res) => {
+    try {
+      const allChickens = await storage.getAllChickens();
+      res.json(allChickens);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch chickens" });
+    }
+  });
+
+  app.post("/api/chickens", async (req, res) => {
+    try {
+      const parsed = insertChickenSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ message: parsed.error.message });
+        return;
+      }
+      const chicken = await storage.createChicken(parsed.data);
+      res.status(201).json(chicken);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to add chicken" });
+    }
+  });
+
+  app.delete("/api/chickens/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteChicken(id);
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ message: "Failed to remove chicken" });
     }
   });
 

@@ -1,7 +1,10 @@
-import { type EggEntry, type InsertEggEntry, eggEntries } from "@shared/schema";
+import {
+  type EggEntry, type InsertEggEntry, eggEntries,
+  type Chicken, type InsertChicken, chickens,
+} from "@shared/schema";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import Database from "better-sqlite3";
-import { eq, desc, sql, and, gte, lte } from "drizzle-orm";
+import { eq, desc, and, gte, lte } from "drizzle-orm";
 
 const sqlite = new Database("data.db");
 sqlite.pragma("journal_mode = WAL");
@@ -9,12 +12,17 @@ sqlite.pragma("journal_mode = WAL");
 export const db = drizzle(sqlite);
 
 export interface IStorage {
+  // Egg entries
   getAllEntries(): Promise<EggEntry[]>;
   getEntriesByYear(year: number): Promise<EggEntry[]>;
   getEntryByDate(date: string): Promise<EggEntry | undefined>;
   createEntry(entry: InsertEggEntry): Promise<EggEntry>;
   updateEntry(id: number, entry: Partial<InsertEggEntry>): Promise<EggEntry | undefined>;
   deleteEntry(id: number): Promise<void>;
+  // Chickens
+  getAllChickens(): Promise<Chicken[]>;
+  createChicken(chicken: InsertChicken): Promise<Chicken>;
+  deleteChicken(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -52,6 +60,18 @@ export class DatabaseStorage implements IStorage {
 
   async deleteEntry(id: number): Promise<void> {
     db.delete(eggEntries).where(eq(eggEntries.id, id)).run();
+  }
+
+  async getAllChickens(): Promise<Chicken[]> {
+    return db.select().from(chickens).all();
+  }
+
+  async createChicken(chicken: InsertChicken): Promise<Chicken> {
+    return db.insert(chickens).values(chicken).returning().get();
+  }
+
+  async deleteChicken(id: number): Promise<void> {
+    db.delete(chickens).where(eq(chickens.id, id)).run();
   }
 }
 

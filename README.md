@@ -7,60 +7,64 @@ A fun, family-friendly dashboard to track your backyard chicken egg production.
 - **Daily egg logging** with +/- stepper or type-in
 - **Stats at a glance** — annual total, weekly/monthly averages, best day
 - **Egg basket** that visually fills up as your count grows
-- **Egg stack chart** — stacked eggs per month instead of boring bars
+- **Egg stack chart** — stacked eggs per month
 - **Chicken of the Week** — rotating spotlight with positive affirmations
 - **Milestone badges** — earn badges at 10, 50, 100, 250, 500, 1K+ eggs
 - **Flock management** — add/remove your chickens by name
 - **Weather & season** — enter your zip code to see local temp and season
 - **Dark mode** by default (toggle available)
 
-## Quick Start
+## Deploy to Railway (Recommended — Free)
 
-### Prerequisites
+### Step 1: Push to GitHub
 
-- [Node.js](https://nodejs.org/) v18 or higher
-- npm (comes with Node.js)
-
-### Setup
+1. Go to [github.com/new](https://github.com/new) and create a new repo called `coop-counter` (or whatever you want)
+2. Make it **Public** or **Private** — either works
+3. Don't add a README or .gitignore (this project already has both)
+4. After creating the repo, GitHub will show you commands. Run these in the project folder:
 
 ```bash
-# 1. Install dependencies
-npm install
+git remote add origin https://github.com/YOUR_USERNAME/coop-counter.git
+git branch -M main
+git push -u origin main
+```
 
-# 2. Create the database
+### Step 2: Deploy to Railway
+
+1. Go to [railway.app](https://railway.app) and sign in with your GitHub account
+2. Click **"New Project"**
+3. Choose **"Deploy from GitHub repo"**
+4. Select your `coop-counter` repo
+5. Railway will auto-detect it as a Node.js app. Click **Deploy**
+6. Once deployed, go to **Settings → Networking → Generate Domain** to get your public URL
+
+That's it. Railway runs `npm install`, `npm run build`, and `npm start` automatically.
+
+### Step 3: Initialize the Database
+
+After the first deploy, open Railway's terminal (click on your service → **Shell**) and run:
+
+```bash
 npx drizzle-kit push
+```
 
-# 3. Start the app
+This creates the SQLite database tables. You only need to do this once.
+
+### Done!
+
+Your app is now live at your Railway URL. Share it with anyone — they can open it in any browser.
+
+**Note:** Railway's free tier gives you 500 hours/month of execution time and $5 of resources, which is plenty for a personal app like this.
+
+## Local Development
+
+```bash
+npm install
+npx drizzle-kit push
 npm run dev
 ```
 
-The app will be running at **http://localhost:5000**
-
-### Production Build
-
-```bash
-# Build for production
-npm run build
-
-# Start production server
-NODE_ENV=production node dist/index.cjs
-```
-
-## Hosting Options
-
-### Raspberry Pi (great for a coop project!)
-
-1. Install Node.js on your Pi: `curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash - && sudo apt-get install -y nodejs`
-2. Copy this folder to your Pi
-3. Run the Quick Start steps above
-4. Access from any device on your home network at `http://<pi-ip>:5000`
-
-### Railway / Render / Fly.io (free cloud hosting)
-
-1. Push this folder to a GitHub repo
-2. Connect it to Railway, Render, or Fly.io
-3. Set the start command to: `npm run build && NODE_ENV=production node dist/index.cjs`
-4. The `data.db` SQLite file stores all your data
+App runs at **http://localhost:5000**
 
 ## Tech Stack
 

@@ -11,6 +11,30 @@ import { EggBasket } from "@/components/EggBasket";
 import { EggStackChart } from "@/components/EggStackChart";
 import type { EggEntry, Chicken } from "@shared/schema";
 
+// ─── Milestone badges ───
+const MILESTONES = [
+  { threshold: 10,    emoji: "🐣", title: "First Steps",       message: "Your first 10 eggs! The journey begins." },
+  { threshold: 50,    emoji: "🥚", title: "Egg-cellent Start", message: "50 eggs collected — the coop is producing!" },
+  { threshold: 100,   emoji: "💯", title: "Century Club",      message: "Triple digits! 100 eggs and counting." },
+  { threshold: 250,   emoji: "🥉", title: "Bronze Coop",       message: "250 eggs — your flock is on a roll." },
+  { threshold: 500,   emoji: "🥈", title: "Silver Coop",       message: "Half a thousand eggs! Incredible." },
+  { threshold: 750,   emoji: "⭐", title: "Coop All-Star",     message: "750 eggs — your hens deserve a vacation." },
+  { threshold: 1000,  emoji: "🥇", title: "Gold Coop",         message: "ONE THOUSAND EGGS. Legendary status." },
+  { threshold: 1500,  emoji: "💎", title: "Diamond Coop",      message: "1,500 eggs — you're running a small farm empire." },
+  { threshold: 2000,  emoji: "👑", title: "Royal Coop",        message: "2,000 eggs! Bow before the egg royalty." },
+  { threshold: 3000,  emoji: "🏰", title: "Egg Dynasty",       message: "3,000 eggs. This isn't a hobby, it's a legacy." },
+  { threshold: 5000,  emoji: "🚀", title: "To the Moon",       message: "5,000 eggs! Houston, we have a coop." },
+  { threshold: 10000, emoji: "🐉", title: "Egg Dragon",        message: "10,000 eggs. You are the stuff of legend." },
+];
+
+function getEarnedMilestones(total: number) {
+  return MILESTONES.filter(m => total >= m.threshold);
+}
+
+function getNextMilestone(total: number) {
+  return MILESTONES.find(m => total < m.threshold) || null;
+}
+
 // ─── Affirmations pool ───
 const AFFIRMATIONS = [
   "You're an absolute egg-laying superstar!",
@@ -47,9 +71,11 @@ function getChickenOfTheWeek(allChickens: Chicken[], weekNumber: number): Chicke
 
 // ─── Theme toggle ───
 function ThemeToggle() {
-  const [dark, setDark] = useState(() =>
-    window.matchMedia("(prefers-color-scheme: dark)").matches
-  );
+  const [dark, setDark] = useState(() => {
+    // Default to dark mode
+    document.documentElement.classList.add("dark");
+    return true;
+  });
 
   const toggle = () => {
     const next = !dark;
@@ -406,6 +432,69 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Milestones & Badges */}
+        <Card data-testid="milestones">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold">🏅 Milestones</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {(() => {
+              const earned = getEarnedMilestones(stats.total);
+              const next = getNextMilestone(stats.total);
+              return (
+                <div>
+                  {/* Earned badges */}
+                  {earned.length === 0 ? (
+                    <div className="text-center py-4 text-muted-foreground">
+                      <p className="text-2xl mb-2">🐣</p>
+                      <p className="text-sm">Log your first 10 eggs to earn your first badge!</p>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-3 mb-4">
+                      {earned.map((m) => (
+                        <div
+                          key={m.threshold}
+                          className="group relative flex flex-col items-center gap-1 p-3 rounded-lg bg-muted/60 min-w-[80px]"
+                          data-testid={`badge-${m.threshold}`}
+                        >
+                          <span className="text-2xl">{m.emoji}</span>
+                          <span className="text-[10px] font-semibold text-center leading-tight">{m.title}</span>
+                          <span className="text-[10px] text-muted-foreground tabular-nums">{m.threshold.toLocaleString()}</span>
+                          {/* Tooltip on hover */}
+                          <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 px-3 py-1.5 bg-foreground text-background text-xs rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20">
+                            {m.message}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Next milestone teaser */}
+                  {next && (
+                    <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-muted/30 border border-dashed border-border">
+                      <span className="text-xl opacity-40 grayscale">{next.emoji}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-muted-foreground">
+                          Next: {next.title} — {next.threshold.toLocaleString()} eggs
+                        </p>
+                        <div className="w-full h-1.5 bg-muted rounded-full mt-1 overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-primary transition-all duration-500"
+                            style={{ width: `${Math.min((stats.total / next.threshold) * 100, 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                      <span className="text-xs text-muted-foreground tabular-nums flex-shrink-0">
+                        {(next.threshold - stats.total).toLocaleString()} to go
+                      </span>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+          </CardContent>
+        </Card>
 
         {/* Charts */}
         <div className="grid lg:grid-cols-2 gap-4">

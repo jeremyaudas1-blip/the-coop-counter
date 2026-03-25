@@ -6,17 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { format, parseISO, eachMonthOfInterval, startOfYear, endOfYear, differenceInDays, startOfWeek, endOfWeek, isWithinInterval, getISOWeek } from "date-fns";
-import { Plus, Trash2, Sun, Moon, X } from "lucide-react";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
+import { Plus, Minus, Trash2, Sun, Moon, X } from "lucide-react";
 import { EggBasket } from "@/components/EggBasket";
+import { EggStackChart } from "@/components/EggStackChart";
 import type { EggEntry, Chicken } from "@shared/schema";
 
 // ─── Affirmations pool ───
@@ -195,13 +187,7 @@ export default function Dashboard() {
     });
   }, [entries, selectedYear]);
 
-  // ─── Annual goal for basket (roughly 1 egg/day/chicken or a nice round number) ───
-  const annualGoal = useMemo(() => {
-    // Default goal: 365 eggs (1/day). If they have chickens, scale by flock size × 250.
-    // Users can mentally adjust — this gives a fun visual target.
-    if (allChickens.length > 0) return allChickens.length * 250;
-    return 365;
-  }, [allChickens]);
+
 
   // ─── Recent entries ───
   const recentEntries = useMemo(() => {
@@ -275,17 +261,40 @@ export default function Dashboard() {
                   data-testid="input-date"
                 />
               </div>
-              <div className="w-full sm:w-32">
+              <div className="w-full sm:w-auto">
                 <label className="text-sm font-medium text-muted-foreground mb-1 block">🥚 Eggs collected</label>
-                <Input
-                  type="number"
-                  min="0"
-                  max="100"
-                  placeholder="0"
-                  value={eggCount}
-                  onChange={(e) => setEggCount(e.target.value)}
-                  data-testid="input-egg-count"
-                />
+                <div className="flex items-center gap-0">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="icon"
+                    className="rounded-r-none flex-shrink-0"
+                    onClick={() => setEggCount(String(Math.max(0, (parseInt(eggCount) || 0) - 1)))}
+                    data-testid="button-minus"
+                  >
+                    <Minus className="w-4 h-4" />
+                  </Button>
+                  <Input
+                    type="number"
+                    min="0"
+                    max="100"
+                    placeholder="0"
+                    value={eggCount}
+                    onChange={(e) => setEggCount(e.target.value)}
+                    className="w-16 text-center rounded-none border-x-0 tabular-nums [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    data-testid="input-egg-count"
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="icon"
+                    className="rounded-l-none flex-shrink-0"
+                    onClick={() => setEggCount(String(Math.min(100, (parseInt(eggCount) || 0) + 1)))}
+                    data-testid="button-plus"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
               <Button type="submit" disabled={addMutation.isPending || !eggCount} data-testid="button-submit">
                 <Plus className="w-4 h-4 mr-1" />
@@ -400,7 +409,7 @@ export default function Dashboard() {
 
         {/* Charts */}
         <div className="grid lg:grid-cols-2 gap-4">
-          {/* Monthly Bar Chart */}
+          {/* Monthly Egg Stack Chart */}
           <Card data-testid="chart-monthly">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -409,24 +418,7 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               <div className="h-56">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={monthlyData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                    <XAxis dataKey="month" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} axisLine={false} tickLine={false} />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "hsl(var(--card))",
-                        border: "1px solid hsl(var(--border))",
-                        borderRadius: "8px",
-                        color: "hsl(var(--foreground))",
-                        fontSize: 13,
-                      }}
-                      formatter={(value: number) => [`${value} eggs 🥚`, "Total"]}
-                    />
-                    <Bar dataKey="eggs" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} animationDuration={800} />
-                  </BarChart>
-                </ResponsiveContainer>
+                <EggStackChart data={monthlyData} />
               </div>
             </CardContent>
           </Card>
@@ -439,7 +431,7 @@ export default function Dashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent className="flex items-center justify-center">
-              <EggBasket current={stats.total} goal={annualGoal} />
+              <EggBasket current={stats.total} />
             </CardContent>
           </Card>
         </div>

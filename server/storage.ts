@@ -10,6 +10,25 @@ import { eq, desc, and, gte, lte } from "drizzle-orm";
 const sqlite = new Database("data.db");
 sqlite.pragma("journal_mode = WAL");
 
+// Auto-create tables on startup so we don't need to run drizzle-kit push manually
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS egg_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL,
+    count INTEGER NOT NULL,
+    note TEXT
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_egg_entries_date ON egg_entries(date);
+  CREATE TABLE IF NOT EXISTS chickens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
+`);
+
 export const db = drizzle(sqlite);
 
 export interface IStorage {

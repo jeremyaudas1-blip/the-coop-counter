@@ -11,8 +11,9 @@ import { EggBasket } from "@/components/EggBasket";
 import { EggStackChart } from "@/components/EggStackChart";
 import { WeatherBadge } from "@/components/WeatherBadge";
 
-interface EggEntry { id: number; date: string; count: number; note?: string | null; }
+interface EggEntry { id: number; date: string; count: number; note?: string | null; collectorIds?: string | null; }
 interface Chicken { id: number; name: string; }
+interface Collector { id: number; name: string; }
 
 // ─── Milestone badges ───
 const MILESTONES = [
@@ -29,223 +30,182 @@ const MILESTONES = [
   { threshold: 5000,  emoji: "🚀", title: "To the Moon",       message: "5,000 eggs! Houston, we have a coop." },
   { threshold: 10000, emoji: "🐉", title: "Egg Dragon",        message: "10,000 eggs. You are the stuff of legend." },
 ];
+function getEarnedMilestones(total: number) { return MILESTONES.filter(m => total >= m.threshold); }
+function getNextMilestone(total: number) { return MILESTONES.find(m => total < m.threshold) || null; }
 
-function getEarnedMilestones(total: number) {
-  return MILESTONES.filter(m => total >= m.threshold);
-}
-
-function getNextMilestone(total: number) {
-  return MILESTONES.find(m => total < m.threshold) || null;
-}
-
-// ─── Affirmations pool ───
+// ─── Affirmations ───
 const AFFIRMATIONS = [
-  "You're an absolute egg-laying superstar!",
-  "The coop wouldn't be the same without you!",
-  "Keep struttin' your stuff, you magnificent bird!",
-  "You've been laying it DOWN this week!",
-  "MVP of the henhouse, no contest!",
-  "Your eggs are chef's kiss perfection!",
-  "The flock looks up to you (literally)!",
-  "Top-tier feathers AND top-tier eggs!",
-  "You make every morning brighter!",
-  "Cluckin' amazing work this week!",
-  "The breakfast table thanks you!",
-  "Nobody does it better, bawk bawk!",
-  "You deserve all the scratch and treats!",
-  "Queen of the nesting box!",
-  "What a week — you crushed it!",
-  "You lay eggs like it's your job... because it is, and you're great at it!",
-  "Your commitment to breakfast excellence is unmatched!",
-  "If there were a Chicken Hall of Fame, you'd be first ballot!",
+  "You're an absolute egg-laying superstar!", "The coop wouldn't be the same without you!",
+  "Keep struttin' your stuff, you magnificent bird!", "You've been laying it DOWN this week!",
+  "MVP of the henhouse, no contest!", "Your eggs are chef's kiss perfection!",
+  "The flock looks up to you (literally)!", "Top-tier feathers AND top-tier eggs!",
+  "You make every morning brighter!", "Cluckin' amazing work this week!",
+  "The breakfast table thanks you!", "Nobody does it better, bawk bawk!",
+  "You deserve all the scratch and treats!", "Queen of the nesting box!",
+  "What a week — you crushed it!", "You lay eggs like it's your job... because it is, and you're great at it!",
+  "Your commitment to breakfast excellence is unmatched!", "If there were a Chicken Hall of Fame, you'd be first ballot!",
 ];
+function getWeeklyAffirmation(name: string, week: number) { return AFFIRMATIONS[(name.length * 31 + week * 17) % AFFIRMATIONS.length]; }
+function getChickenOfTheWeek(chickens: Chicken[], week: number) { return chickens.length ? chickens[week % chickens.length] : null; }
 
-function getWeeklyAffirmation(chickenName: string, weekNumber: number): string {
-  const seed = (chickenName.length * 31 + weekNumber * 17) % AFFIRMATIONS.length;
-  return AFFIRMATIONS[seed];
-}
-
-function getChickenOfTheWeek(allChickens: Chicken[], weekNumber: number): Chicken | null {
-  if (allChickens.length === 0) return null;
-  const index = weekNumber % allChickens.length;
-  return allChickens[index];
-}
+// ─── Rank emojis ───
+const RANK_DISPLAY = ["🥇", "🥈", "🥉"];
 
 // ─── Theme toggle ───
 function ThemeToggle() {
-  const [dark, setDark] = useState(() => {
-    document.documentElement.classList.add("dark");
-    return true;
-  });
-
-  const toggle = () => {
-    const next = !dark;
-    setDark(next);
-    document.documentElement.classList.toggle("dark", next);
-  };
-
+  const [dark, setDark] = useState(() => { document.documentElement.classList.add("dark"); return true; });
   return (
-    <Button size="icon" variant="ghost" onClick={toggle} data-testid="theme-toggle">
+    <Button size="icon" variant="ghost" onClick={() => { const n = !dark; setDark(n); document.documentElement.classList.toggle("dark", n); }} data-testid="theme-toggle">
       {dark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
     </Button>
   );
 }
 
-// ─── Main dashboard ───
+// ─── Main ───
 export default function Dashboard() {
   const { toast } = useToast();
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [eggCount, setEggCount] = useState("");
   const [selectedDate, setSelectedDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [selectedCollectors, setSelectedCollectors] = useState<number[]>([]);
   const [chickenName, setChickenName] = useState("");
   const [showManageChickens, setShowManageChickens] = useState(false);
+  const [collectorName, setCollectorName] = useState("");
+  const [showManageCollectors, setShowManageCollectors] = useState(false);
 
-  // ─── Data queries ───
+  // ─── Queries ───
   const { data: entries = [], isLoading } = useQuery<EggEntry[]>({
     queryKey: ["/api/entries", selectedYear],
-    queryFn: async () => {
-      const res = await apiRequest("GET", `/api/entries?year=${selectedYear}`);
-      return res.json();
-    },
+    queryFn: async () => { const r = await apiRequest("GET", `/api/entries?year=${selectedYear}`); return r.json(); },
   });
-
   const { data: allChickens = [] } = useQuery<Chicken[]>({
     queryKey: ["/api/chickens"],
-    queryFn: async () => {
-      const res = await apiRequest("GET", "/api/chickens");
-      return res.json();
-    },
+    queryFn: async () => { const r = await apiRequest("GET", "/api/chickens"); return r.json(); },
+  });
+  const { data: allCollectors = [] } = useQuery<Collector[]>({
+    queryKey: ["/api/collectors"],
+    queryFn: async () => { const r = await apiRequest("GET", "/api/collectors"); return r.json(); },
   });
 
   // ─── Mutations ───
   const addMutation = useMutation({
-    mutationFn: async (data: { date: string; count: number }) => {
-      const res = await apiRequest("POST", "/api/entries", data);
-      return res.json();
+    mutationFn: async (data: { date: string; count: number; collectorIds?: string }) => {
+      const r = await apiRequest("POST", "/api/entries", data); return r.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/entries", selectedYear] });
-      setEggCount("");
+      setEggCount(""); setSelectedCollectors([]);
       toast({ title: "🥚 Eggs logged!", description: "Another great day at the coop." });
     },
-    onError: () => {
-      toast({ title: "Oops!", description: "Failed to save that entry.", variant: "destructive" });
-    },
+    onError: () => { toast({ title: "Oops!", description: "Failed to save.", variant: "destructive" }); },
   });
-
   const deleteMutation = useMutation({
-    mutationFn: async (id: number) => {
-      await apiRequest("DELETE", `/api/entries/${id}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/entries", selectedYear] });
-    },
+    mutationFn: async (id: number) => { await apiRequest("DELETE", `/api/entries/${id}`); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/entries", selectedYear] }); },
   });
-
   const addChickenMutation = useMutation({
-    mutationFn: async (name: string) => {
-      const res = await apiRequest("POST", "/api/chickens", { name });
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/chickens"] });
-      setChickenName("");
-      toast({ title: "🐔 Welcome to the flock!", description: "New chicken added." });
-    },
+    mutationFn: async (name: string) => { const r = await apiRequest("POST", "/api/chickens", { name }); return r.json(); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/chickens"] }); setChickenName(""); toast({ title: "🐔 Welcome to the flock!" }); },
   });
-
   const deleteChickenMutation = useMutation({
-    mutationFn: async (id: number) => {
-      await apiRequest("DELETE", `/api/chickens/${id}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/chickens"] });
-    },
+    mutationFn: async (id: number) => { await apiRequest("DELETE", `/api/chickens/${id}`); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/chickens"] }); },
+  });
+  const addCollectorMutation = useMutation({
+    mutationFn: async (name: string) => { const r = await apiRequest("POST", "/api/collectors", { name }); return r.json(); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/collectors"] }); setCollectorName(""); toast({ title: "👤 Collector added!" }); },
+  });
+  const deleteCollectorMutation = useMutation({
+    mutationFn: async (id: number) => { await apiRequest("DELETE", `/api/collectors/${id}`); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/collectors"] }); },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const count = parseInt(eggCount);
     if (isNaN(count) || count < 0) return;
-    addMutation.mutate({ date: selectedDate, count });
+    const collectorIds = selectedCollectors.length > 0 ? JSON.stringify(selectedCollectors) : undefined;
+    addMutation.mutate({ date: selectedDate, count, collectorIds });
   };
 
-  const handleAddChicken = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!chickenName.trim()) return;
-    addChickenMutation.mutate(chickenName.trim());
+  const toggleCollector = (id: number) => {
+    setSelectedCollectors(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]);
   };
 
-  // ─── Computed stats ───
+  // ─── Stats ───
   const stats = useMemo(() => {
-    if (!entries.length)
-      return { total: 0, dailyAvg: 0, weeklyAvg: 0, monthlyAvg: 0, bestDay: null as EggEntry | null, bestCount: 0, daysLogged: 0 };
-
-    const total = entries.reduce((sum, e) => sum + e.count, 0);
-    const daysLogged = entries.length;
-    const dailyAvg = total / daysLogged;
-
+    if (!entries.length) return { total: 0, dailyAvg: 0, weeklyAvg: 0, monthlyAvg: 0, bestDay: null as EggEntry | null, bestCount: 0 };
+    const total = entries.reduce((s, e) => s + e.count, 0);
+    const dailyAvg = total / entries.length;
     const now = new Date();
-    const yearStart = startOfYear(new Date(selectedYear, 0, 1));
-    const yearEnd = selectedYear === currentYear ? now : endOfYear(new Date(selectedYear, 0, 1));
-    const totalWeeks = Math.max(1, Math.ceil(differenceInDays(yearEnd, yearStart) / 7));
-    const weeklyAvg = total / totalWeeks;
-
-    const monthsSet = new Set(entries.map((e) => e.date.substring(0, 7)));
+    const yStart = startOfYear(new Date(selectedYear, 0, 1));
+    const yEnd = selectedYear === currentYear ? now : endOfYear(new Date(selectedYear, 0, 1));
+    const weeklyAvg = total / Math.max(1, Math.ceil(differenceInDays(yEnd, yStart) / 7));
+    const monthsSet = new Set(entries.map(e => e.date.substring(0, 7)));
     const monthlyAvg = monthsSet.size > 0 ? total / monthsSet.size : 0;
-
-    const bestEntry = entries.reduce((best, e) => (e.count > (best?.count ?? 0) ? e : best), entries[0]);
-
-    return { total, dailyAvg, weeklyAvg, monthlyAvg, bestDay: bestEntry, bestCount: bestEntry?.count ?? 0, daysLogged };
+    const bestEntry = entries.reduce((b, e) => (e.count > (b?.count ?? 0) ? e : b), entries[0]);
+    return { total, dailyAvg, weeklyAvg, monthlyAvg, bestDay: bestEntry, bestCount: bestEntry?.count ?? 0 };
   }, [entries, selectedYear, currentYear]);
 
   const monthlyData = useMemo(() => {
-    const yearStart = new Date(selectedYear, 0, 1);
-    const yearEnd = new Date(selectedYear, 11, 31);
-    const months = eachMonthOfInterval({ start: yearStart, end: yearEnd });
-    return months.map((month) => {
-      const monthStr = format(month, "yyyy-MM");
-      const monthEntries = entries.filter((e) => e.date.startsWith(monthStr));
-      const total = monthEntries.reduce((sum, e) => sum + e.count, 0);
-      return { month: format(month, "MMM"), eggs: total };
+    const months = eachMonthOfInterval({ start: new Date(selectedYear, 0, 1), end: new Date(selectedYear, 11, 31) });
+    return months.map(m => {
+      const ms = format(m, "yyyy-MM");
+      return { month: format(m, "MMM"), eggs: entries.filter(e => e.date.startsWith(ms)).reduce((s, e) => s + e.count, 0) };
     });
   }, [entries, selectedYear]);
 
-  const recentEntries = useMemo(() => {
-    return [...entries].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10);
-  }, [entries]);
+  const recentEntries = useMemo(() => [...entries].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10), [entries]);
 
   const thisWeekTotal = useMemo(() => {
-    const now = new Date();
-    const wStart = startOfWeek(now, { weekStartsOn: 0 });
-    const wEnd = endOfWeek(now, { weekStartsOn: 0 });
-    return entries
-      .filter((e) => {
-        const d = parseISO(e.date);
-        return isWithinInterval(d, { start: wStart, end: wEnd });
-      })
-      .reduce((sum, e) => sum + e.count, 0);
+    const now = new Date(); const wS = startOfWeek(now, { weekStartsOn: 0 }); const wE = endOfWeek(now, { weekStartsOn: 0 });
+    return entries.filter(e => isWithinInterval(parseISO(e.date), { start: wS, end: wE })).reduce((s, e) => s + e.count, 0);
   }, [entries]);
+
+  // ─── Leaderboard ───
+  const leaderboard = useMemo(() => {
+    const collectorMap = new Map<number, { name: string; totalEggs: number; collections: number }>();
+    allCollectors.forEach(c => collectorMap.set(c.id, { name: c.name, totalEggs: 0, collections: 0 }));
+
+    entries.forEach(entry => {
+      if (!entry.collectorIds) return;
+      try {
+        const ids: number[] = JSON.parse(entry.collectorIds);
+        // Split eggs evenly among collectors, or credit each with the full count
+        // Full count per collector makes more sense for motivation
+        ids.forEach(id => {
+          const c = collectorMap.get(id);
+          if (c) { c.totalEggs += entry.count; c.collections += 1; }
+        });
+      } catch { /* invalid json, skip */ }
+    });
+
+    return Array.from(collectorMap.values())
+      .sort((a, b) => b.totalEggs - a.totalEggs);
+  }, [entries, allCollectors]);
 
   const weekNumber = getISOWeek(new Date());
   const chickenOfTheWeek = getChickenOfTheWeek(allChickens, weekNumber);
   const affirmation = chickenOfTheWeek ? getWeeklyAffirmation(chickenOfTheWeek.name, weekNumber) : "";
+  const availableYears = useMemo(() => { const y = [currentYear]; for (let i = currentYear - 1; i >= currentYear - 5; i--) y.push(i); return y; }, [currentYear]);
 
-  const availableYears = useMemo(() => {
-    const years = [currentYear];
-    for (let y = currentYear - 1; y >= currentYear - 5; y--) years.push(y);
-    return years;
-  }, [currentYear]);
+  // Helper to get collector names from an entry
+  const getCollectorNames = (entry: EggEntry): string[] => {
+    if (!entry.collectorIds) return [];
+    try {
+      const ids: number[] = JSON.parse(entry.collectorIds);
+      return ids.map(id => allCollectors.find(c => c.id === id)?.name).filter(Boolean) as string[];
+    } catch { return []; }
+  };
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-4 py-2.5 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
-              <span className="text-2xl" role="img" aria-label="chicken">🐔</span>
+              <span className="text-2xl">🐔</span>
               <h1 className="text-lg font-bold tracking-tight" data-testid="app-title">The Coop Counter</h1>
             </div>
             <div className="hidden sm:block"><WeatherBadge /></div>
@@ -253,7 +213,7 @@ export default function Dashboard() {
           <div className="flex items-center gap-2">
             <select value={selectedYear} onChange={(e) => setSelectedYear(parseInt(e.target.value))}
               className="text-sm bg-muted border border-border rounded-md px-2 py-1.5 font-medium" data-testid="year-selector">
-              {availableYears.map((y) => (<option key={y} value={y}>{y}</option>))}
+              {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
             </select>
             <ThemeToggle />
           </div>
@@ -265,31 +225,55 @@ export default function Dashboard() {
         {/* Egg Input Form */}
         <Card data-testid="egg-input-card">
           <CardContent className="pt-6">
-            <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3 items-end">
-              <div className="flex-1 min-w-0">
-                <label className="text-sm font-medium text-muted-foreground mb-1 block">📅 Date</label>
-                <Input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} data-testid="input-date" />
-              </div>
-              <div className="w-full sm:w-auto">
-                <label className="text-sm font-medium text-muted-foreground mb-1 block">🥚 Eggs collected</label>
-                <div className="flex items-center gap-0">
-                  <Button type="button" variant="secondary" size="icon" className="rounded-r-none flex-shrink-0"
-                    onClick={() => setEggCount(String(Math.max(0, (parseInt(eggCount) || 0) - 1)))} data-testid="button-minus">
-                    <Minus className="w-4 h-4" />
-                  </Button>
-                  <Input type="number" min="0" max="100" placeholder="0" value={eggCount}
-                    onChange={(e) => setEggCount(e.target.value)}
-                    className="w-16 text-center rounded-none border-x-0 tabular-nums [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                    data-testid="input-egg-count" />
-                  <Button type="button" variant="secondary" size="icon" className="rounded-l-none flex-shrink-0"
-                    onClick={() => setEggCount(String(Math.min(100, (parseInt(eggCount) || 0) + 1)))} data-testid="button-plus">
-                    <Plus className="w-4 h-4" />
-                  </Button>
+            <form onSubmit={handleSubmit} className="space-y-3">
+              <div className="flex flex-col sm:flex-row gap-3 items-end">
+                <div className="flex-1 min-w-0">
+                  <label className="text-sm font-medium text-muted-foreground mb-1 block">📅 Date</label>
+                  <Input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} data-testid="input-date" />
                 </div>
+                <div className="w-full sm:w-auto">
+                  <label className="text-sm font-medium text-muted-foreground mb-1 block">🥚 Eggs collected</label>
+                  <div className="flex items-center gap-0">
+                    <Button type="button" variant="secondary" size="icon" className="rounded-r-none flex-shrink-0"
+                      onClick={() => setEggCount(String(Math.max(0, (parseInt(eggCount) || 0) - 1)))} data-testid="button-minus">
+                      <Minus className="w-4 h-4" />
+                    </Button>
+                    <Input type="number" min="0" max="100" placeholder="0" value={eggCount}
+                      onChange={(e) => setEggCount(e.target.value)}
+                      className="w-16 text-center rounded-none border-x-0 tabular-nums [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      data-testid="input-egg-count" />
+                    <Button type="button" variant="secondary" size="icon" className="rounded-l-none flex-shrink-0"
+                      onClick={() => setEggCount(String(Math.min(100, (parseInt(eggCount) || 0) + 1)))} data-testid="button-plus">
+                      <Plus className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+                <Button type="submit" disabled={addMutation.isPending || !eggCount} data-testid="button-submit">
+                  <Plus className="w-4 h-4 mr-1" /> Log Eggs
+                </Button>
               </div>
-              <Button type="submit" disabled={addMutation.isPending || !eggCount} data-testid="button-submit">
-                <Plus className="w-4 h-4 mr-1" /> Log Eggs
-              </Button>
+
+              {/* Collector selection */}
+              {allCollectors.length > 0 && (
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground mb-1.5 block">👤 Who collected?</label>
+                  <div className="flex flex-wrap gap-2">
+                    {allCollectors.map(c => (
+                      <button key={c.id} type="button"
+                        onClick={() => toggleCollector(c.id)}
+                        className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                          selectedCollectors.includes(c.id)
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted text-muted-foreground hover:text-foreground"
+                        }`}
+                        data-testid={`collector-toggle-${c.id}`}
+                      >
+                        {selectedCollectors.includes(c.id) ? "✓ " : ""}{c.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </form>
           </CardContent>
         </Card>
@@ -299,7 +283,7 @@ export default function Dashboard() {
           <CardContent className="pt-5 pb-5">
             {chickenOfTheWeek ? (
               <div className="flex flex-col sm:flex-row items-center gap-4">
-                <div className="text-5xl flex-shrink-0" role="img" aria-label="star chicken">🐓</div>
+                <div className="text-5xl flex-shrink-0">🐓</div>
                 <div className="text-center sm:text-left">
                   <p className="text-xs font-semibold text-primary uppercase tracking-widest mb-1">🌟 Chicken of the Week 🌟</p>
                   <p className="text-xl font-bold">{chickenOfTheWeek.name}</p>
@@ -309,7 +293,7 @@ export default function Dashboard() {
             ) : (
               <div className="text-center py-2">
                 <p className="text-sm text-muted-foreground">🐣 No chickens in the flock yet! Add your chickens below to see who gets featured each week.</p>
-                <Button variant="secondary" size="sm" className="mt-3" onClick={() => setShowManageChickens(true)} data-testid="button-add-chickens-cta">Add Your Chickens</Button>
+                <Button variant="secondary" size="sm" className="mt-3" onClick={() => setShowManageChickens(true)}>Add Your Chickens</Button>
               </div>
             )}
           </CardContent>
@@ -317,19 +301,19 @@ export default function Dashboard() {
 
         {/* KPI Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <Card data-testid="stat-total"><CardContent className="pt-5 pb-4">
+          <Card><CardContent className="pt-5 pb-4">
             <div className="flex items-center gap-2 mb-1"><span className="text-base">🥚</span><span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{selectedYear} Total</span></div>
             <p className="text-2xl font-bold tabular-nums">{stats.total}</p>
           </CardContent></Card>
-          <Card data-testid="stat-this-week"><CardContent className="pt-5 pb-4">
+          <Card><CardContent className="pt-5 pb-4">
             <div className="flex items-center gap-2 mb-1"><span className="text-base">📦</span><span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">This Week</span></div>
             <p className="text-2xl font-bold tabular-nums">{thisWeekTotal}</p>
           </CardContent></Card>
-          <Card data-testid="stat-daily-avg"><CardContent className="pt-5 pb-4">
+          <Card><CardContent className="pt-5 pb-4">
             <div className="flex items-center gap-2 mb-1"><span className="text-base">📊</span><span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Daily Avg</span></div>
             <p className="text-2xl font-bold tabular-nums">{stats.dailyAvg.toFixed(1)}</p>
           </CardContent></Card>
-          <Card data-testid="stat-best-day"><CardContent className="pt-5 pb-4">
+          <Card><CardContent className="pt-5 pb-4">
             <div className="flex items-center gap-2 mb-1"><span className="text-base">🏆</span><span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Best Day</span></div>
             <p className="text-2xl font-bold tabular-nums">{stats.bestCount}</p>
             {stats.bestDay && <p className="text-xs text-muted-foreground mt-0.5">{format(parseISO(stats.bestDay.date), "MMM d, yyyy")}</p>}
@@ -348,6 +332,52 @@ export default function Dashboard() {
           </CardContent></Card>
         </div>
 
+        {/* Leaderboard */}
+        {allCollectors.length > 0 && (
+          <Card data-testid="leaderboard">
+            <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold">🏆 Egg Collection Leaderboard</CardTitle></CardHeader>
+            <CardContent>
+              {leaderboard.every(c => c.totalEggs === 0) ? (
+                <div className="text-center py-4 text-muted-foreground">
+                  <p className="text-2xl mb-2">🏁</p>
+                  <p className="text-sm">No eggs collected yet! Start logging eggs and selecting who collected them.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {leaderboard.map((person, i) => {
+                    const maxEggs = leaderboard[0]?.totalEggs || 1;
+                    const barWidth = Math.max(5, (person.totalEggs / maxEggs) * 100);
+                    return (
+                      <div key={person.name} className="flex items-center gap-3" data-testid={`leaderboard-row-${i}`}>
+                        <span className="text-lg w-8 text-center flex-shrink-0">
+                          {i < 3 ? RANK_DISPLAY[i] : <span className="text-xs text-muted-foreground font-bold">{i + 1}</span>}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between mb-0.5">
+                            <span className="text-sm font-semibold truncate">{person.name}</span>
+                            <span className="text-sm font-bold tabular-nums flex-shrink-0 ml-2">{person.totalEggs} 🥚</span>
+                          </div>
+                          <div className="w-full h-2.5 bg-muted rounded-full overflow-hidden">
+                            <div
+                              className="h-full rounded-full transition-all duration-500"
+                              style={{
+                                width: `${barWidth}%`,
+                                backgroundColor: i === 0 ? "hsl(var(--primary))" : i === 1 ? "hsl(var(--chart-4))" : i === 2 ? "hsl(var(--chart-5))" : "hsl(var(--muted-foreground))",
+                                opacity: i >= 3 ? 0.5 : 1,
+                              }}
+                            />
+                          </div>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">{person.collections} collection{person.collections !== 1 ? "s" : ""}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         {/* Milestones */}
         <Card data-testid="milestones">
           <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold">🏅 Milestones</CardTitle></CardHeader>
@@ -358,13 +388,10 @@ export default function Dashboard() {
               return (
                 <div>
                   {earned.length === 0 ? (
-                    <div className="text-center py-4 text-muted-foreground">
-                      <p className="text-2xl mb-2">🐣</p>
-                      <p className="text-sm">Log your first 10 eggs to earn your first badge!</p>
-                    </div>
+                    <div className="text-center py-4 text-muted-foreground"><p className="text-2xl mb-2">🐣</p><p className="text-sm">Log your first 10 eggs to earn your first badge!</p></div>
                   ) : (
                     <div className="flex flex-wrap gap-3 mb-4">
-                      {earned.map((m) => (
+                      {earned.map(m => (
                         <div key={m.threshold} className="group relative flex flex-col items-center gap-1 p-3 rounded-lg bg-muted/60 min-w-[80px]" data-testid={`badge-${m.threshold}`}>
                           <span className="text-2xl">{m.emoji}</span>
                           <span className="text-[10px] font-semibold text-center leading-tight">{m.title}</span>
@@ -394,14 +421,10 @@ export default function Dashboard() {
 
         {/* Charts */}
         <div className="grid lg:grid-cols-2 gap-4">
-          <Card data-testid="chart-monthly">
-            <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold flex items-center gap-2">🍳 Eggs by Month</CardTitle></CardHeader>
-            <CardContent><div className="h-56"><EggStackChart data={monthlyData} /></div></CardContent>
-          </Card>
-          <Card data-testid="chart-basket">
-            <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold flex items-center gap-2">🧺 {selectedYear} Egg Basket</CardTitle></CardHeader>
-            <CardContent className="flex items-center justify-center"><EggBasket current={stats.total} /></CardContent>
-          </Card>
+          <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-semibold">🍳 Eggs by Month</CardTitle></CardHeader>
+            <CardContent><div className="h-56"><EggStackChart data={monthlyData} /></div></CardContent></Card>
+          <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-semibold">🧺 {selectedYear} Egg Basket</CardTitle></CardHeader>
+            <CardContent className="flex items-center justify-center"><EggBasket current={stats.total} /></CardContent></Card>
         </div>
 
         {/* Recent Entries */}
@@ -409,32 +432,76 @@ export default function Dashboard() {
           <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold">🪺 Recent Entries</CardTitle></CardHeader>
           <CardContent>
             {isLoading ? (
-              <div className="space-y-2">{[...Array(5)].map((_, i) => (<div key={i} className="h-10 bg-muted animate-pulse rounded-md" />))}</div>
+              <div className="space-y-2">{[...Array(5)].map((_, i) => <div key={i} className="h-10 bg-muted animate-pulse rounded-md" />)}</div>
             ) : recentEntries.length === 0 ? (
-              <div className="text-center py-10 text-muted-foreground">
-                <p className="text-3xl mb-3">🐣</p>
-                <p className="text-sm font-medium">No eggs logged yet</p>
-                <p className="text-xs mt-1">Use the form above to start tracking your flock's hard work!</p>
-              </div>
+              <div className="text-center py-10 text-muted-foreground"><p className="text-3xl mb-3">🐣</p><p className="text-sm font-medium">No eggs logged yet</p></div>
             ) : (
               <div className="space-y-1">
-                {recentEntries.map((entry) => (
-                  <div key={entry.id} className="flex items-center justify-between py-2 px-3 rounded-md hover:bg-muted/50 transition-colors group" data-testid={`entry-row-${entry.id}`}>
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm text-muted-foreground w-24 tabular-nums">{format(parseISO(entry.date), "MMM d, yyyy")}</span>
-                      <span className="font-semibold tabular-nums flex items-center gap-1.5">
-                        <span className="text-primary">{entry.count}</span>
-                        <span className="text-xs text-muted-foreground">egg{entry.count !== 1 ? "s" : ""}</span>
-                        {entry.count >= 6 && <span title="Great day!">🔥</span>}
-                      </span>
+                {recentEntries.map(entry => {
+                  const names = getCollectorNames(entry);
+                  return (
+                    <div key={entry.id} className="flex items-center justify-between py-2 px-3 rounded-md hover:bg-muted/50 transition-colors group" data-testid={`entry-row-${entry.id}`}>
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <span className="text-sm text-muted-foreground w-24 tabular-nums">{format(parseISO(entry.date), "MMM d, yyyy")}</span>
+                        <span className="font-semibold tabular-nums flex items-center gap-1.5">
+                          <span className="text-primary">{entry.count}</span>
+                          <span className="text-xs text-muted-foreground">egg{entry.count !== 1 ? "s" : ""}</span>
+                          {entry.count >= 6 && <span>🔥</span>}
+                        </span>
+                        {names.length > 0 && (
+                          <span className="text-xs text-muted-foreground">
+                            👤 {names.join(", ")}
+                          </span>
+                        )}
+                      </div>
+                      <Button size="icon" variant="ghost" className="opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => deleteMutation.mutate(entry.id)} data-testid={`button-delete-${entry.id}`}>
+                        <Trash2 className="w-3.5 h-3.5 text-muted-foreground" />
+                      </Button>
                     </div>
-                    <Button size="icon" variant="ghost" className="opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={() => deleteMutation.mutate(entry.id)} data-testid={`button-delete-${entry.id}`}>
-                      <Trash2 className="w-3.5 h-3.5 text-muted-foreground" />
-                    </Button>
-                  </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Manage Collectors */}
+        <Card data-testid="manage-collectors">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-semibold">👥 Egg Collectors</CardTitle>
+              {allCollectors.length > 0 && (
+                <Button variant="ghost" size="sm" onClick={() => setShowManageCollectors(!showManageCollectors)}>
+                  {showManageCollectors ? "Hide" : "Manage"}
+                </Button>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            {allCollectors.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-3">👋 Add the family members who collect eggs to start the leaderboard competition!</p>
+            ) : (
+              <div className="flex flex-wrap gap-2 mb-3">
+                {allCollectors.map(c => (
+                  <span key={c.id} className="inline-flex items-center gap-1.5 bg-muted rounded-full px-3 py-1 text-sm font-medium" data-testid={`collector-tag-${c.id}`}>
+                    👤 {c.name}
+                    {showManageCollectors && (
+                      <button onClick={() => deleteCollectorMutation.mutate(c.id)} className="ml-0.5 text-muted-foreground hover:text-destructive transition-colors">
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+                  </span>
                 ))}
               </div>
+            )}
+            {(showManageCollectors || allCollectors.length === 0) && (
+              <form onSubmit={(e) => { e.preventDefault(); if (collectorName.trim()) addCollectorMutation.mutate(collectorName.trim()); }} className="flex gap-2 mt-2">
+                <Input placeholder="Name..." value={collectorName} onChange={(e) => setCollectorName(e.target.value)} className="flex-1" data-testid="input-collector-name" />
+                <Button type="submit" size="sm" disabled={!collectorName.trim()}>
+                  <Plus className="w-4 h-4 mr-1" /> Add
+                </Button>
+              </form>
             )}
           </CardContent>
         </Card>
@@ -444,9 +511,11 @@ export default function Dashboard() {
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-semibold">🐔 Your Flock</CardTitle>
-              <Button variant="ghost" size="sm" onClick={() => setShowManageChickens(!showManageChickens)} data-testid="button-toggle-manage">
-                {showManageChickens ? "Hide" : "Manage"}
-              </Button>
+              {allChickens.length > 0 && (
+                <Button variant="ghost" size="sm" onClick={() => setShowManageChickens(!showManageChickens)}>
+                  {showManageChickens ? "Hide" : "Manage"}
+                </Button>
+              )}
             </div>
           </CardHeader>
           <CardContent>
@@ -454,11 +523,11 @@ export default function Dashboard() {
               <p className="text-sm text-muted-foreground text-center py-3">🐣 No chickens added yet. Give your hens their well-deserved names!</p>
             ) : (
               <div className="flex flex-wrap gap-2 mb-3">
-                {allChickens.map((c) => (
+                {allChickens.map(c => (
                   <span key={c.id} className="inline-flex items-center gap-1.5 bg-muted rounded-full px-3 py-1 text-sm font-medium" data-testid={`chicken-tag-${c.id}`}>
                     🐔 {c.name}
                     {showManageChickens && (
-                      <button onClick={() => deleteChickenMutation.mutate(c.id)} className="ml-0.5 text-muted-foreground hover:text-destructive transition-colors" data-testid={`button-remove-chicken-${c.id}`}>
+                      <button onClick={() => deleteChickenMutation.mutate(c.id)} className="ml-0.5 text-muted-foreground hover:text-destructive transition-colors">
                         <X className="w-3 h-3" />
                       </button>
                     )}
@@ -467,9 +536,9 @@ export default function Dashboard() {
               </div>
             )}
             {(showManageChickens || allChickens.length === 0) && (
-              <form onSubmit={handleAddChicken} className="flex gap-2 mt-2">
-                <Input placeholder="Chicken name..." value={chickenName} onChange={(e) => setChickenName(e.target.value)} className="flex-1" data-testid="input-chicken-name" />
-                <Button type="submit" size="sm" disabled={!chickenName.trim() || addChickenMutation.isPending} data-testid="button-add-chicken">
+              <form onSubmit={(e) => { e.preventDefault(); if (chickenName.trim()) addChickenMutation.mutate(chickenName.trim()); }} className="flex gap-2 mt-2">
+                <Input placeholder="Chicken name..." value={chickenName} onChange={(e) => setChickenName(e.target.value)} className="flex-1" />
+                <Button type="submit" size="sm" disabled={!chickenName.trim()}>
                   <Plus className="w-4 h-4 mr-1" /> Add
                 </Button>
               </form>

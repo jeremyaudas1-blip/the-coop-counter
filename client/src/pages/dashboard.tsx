@@ -9,6 +9,7 @@ import { format, parseISO, eachMonthOfInterval, startOfYear, endOfYear, differen
 import { Plus, Minus, Trash2, Sun, Moon, X } from "lucide-react";
 import { EggBasket } from "@/components/EggBasket";
 import { EggStackChart } from "@/components/EggStackChart";
+import { WeatherBadge } from "@/components/WeatherBadge";
 import type { EggEntry, Chicken } from "@shared/schema";
 
 // ─── Milestone badges ───
@@ -250,12 +251,17 @@ export default function Dashboard() {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl" role="img" aria-label="chicken">🐔</span>
-            <h1 className="text-lg font-bold tracking-tight" data-testid="app-title">
-              The Coop Counter
-            </h1>
+        <div className="max-w-6xl mx-auto px-4 py-2.5 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-2xl" role="img" aria-label="chicken">🐔</span>
+              <h1 className="text-lg font-bold tracking-tight" data-testid="app-title">
+                The Coop Counter
+              </h1>
+            </div>
+            <div className="hidden sm:block">
+              <WeatherBadge />
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <select
@@ -270,6 +276,10 @@ export default function Dashboard() {
             </select>
             <ThemeToggle />
           </div>
+        </div>
+        {/* Weather on mobile — below header row */}
+        <div className="sm:hidden max-w-6xl mx-auto px-4 pb-2">
+          <WeatherBadge />
         </div>
       </header>
 

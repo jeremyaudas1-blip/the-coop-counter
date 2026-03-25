@@ -14,6 +14,11 @@ export const chickens = sqliteTable("chickens", {
   name: text("name").notNull(),
 });
 
+export const settings = sqliteTable("settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+});
+
 export const insertEggEntrySchema = createInsertSchema(eggEntries).omit({
   id: true,
 }).extend({

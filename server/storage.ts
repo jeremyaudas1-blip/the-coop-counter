@@ -1,6 +1,7 @@
 import {
   type EggEntry, type InsertEggEntry, eggEntries,
   type Chicken, type InsertChicken, chickens,
+  settings,
 } from "@shared/schema";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import Database from "better-sqlite3";
@@ -23,6 +24,9 @@ export interface IStorage {
   getAllChickens(): Promise<Chicken[]>;
   createChicken(chicken: InsertChicken): Promise<Chicken>;
   deleteChicken(id: number): Promise<void>;
+  // Settings
+  getSetting(key: string): Promise<string | undefined>;
+  setSetting(key: string, value: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -72,6 +76,17 @@ export class DatabaseStorage implements IStorage {
 
   async deleteChicken(id: number): Promise<void> {
     db.delete(chickens).where(eq(chickens.id, id)).run();
+  }
+
+  async getSetting(key: string): Promise<string | undefined> {
+    const row = db.select().from(settings).where(eq(settings.key, key)).get();
+    return row?.value;
+  }
+
+  async setSetting(key: string, value: string): Promise<void> {
+    // Upsert: delete then insert (SQLite doesn't have native upsert in all Drizzle versions)
+    db.delete(settings).where(eq(settings.key, key)).run();
+    db.insert(settings).values({ key, value }).run();
   }
 }
 

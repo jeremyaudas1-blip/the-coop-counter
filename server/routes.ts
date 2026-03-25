@@ -105,5 +105,22 @@ export async function registerRoutes(
     }
   });
 
+  // ─── Settings (location) ───
+
+  app.get("/api/settings/location", async (_req, res) => {
+    try {
+      const saved = await storage.getSetting("location");
+      if (!saved) { res.status(404).json(null); return; }
+      res.json(JSON.parse(saved));
+    } catch { res.status(500).json(null); }
+  });
+
+  app.post("/api/settings/location", async (req, res) => {
+    try {
+      await storage.setSetting("location", JSON.stringify(req.body));
+      res.json({ ok: true });
+    } catch { res.status(500).json({ message: "Failed to save" }); }
+  });
+
   return httpServer;
 }

@@ -1,235 +1,341 @@
 import {
-  type EggEntry, type InsertEggEntry, eggEntries,
-  type Chicken, type InsertChicken, chickens,
-  type Collector, type InsertCollector, collectors,
-  type User, users,
-  type Family, families,
-  type FamilyMember, familyMembers,
-  type FamilyInvite, familyInvites,
-  settings,
+  type EggEntry, type InsertEggEntry,
+  type Chicken, type InsertChicken,
+  type Collector, type InsertCollector,
+  type User, type Family, type FamilyMember, type FamilyInvite,
 } from "@shared/schema";
-import { drizzle } from "drizzle-orm/better-sqlite3";
-import Database from "better-sqlite3";
-import { eq, desc, and, gte, lte } from "drizzle-orm";
 
-// Database path — uses /app/data/ if the directory exists (Railway volume), otherwise local
-import fs from "fs";
-import path from "path";
-const VOLUME_PATH = "/app/data";
-const DB_PATH = fs.existsSync(VOLUME_PATH) ? path.join(VOLUME_PATH, "data.db") : "data.db";
+// ─── Database setup: Postgres if DATABASE_URL exists, otherwise SQLite ───
 
-const sqlite = new Database(DB_PATH);
-sqlite.pragma("journal_mode = WAL");
+let db: any;
+let isPostgres = false;
 
-// Auto-create tables
-sqlite.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    email TEXT NOT NULL UNIQUE,
-    password_hash TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    marketing_consent INTEGER DEFAULT 0
-  );
-  CREATE TABLE IF NOT EXISTS families (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    owner_id INTEGER NOT NULL,
-    created_at TEXT NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS family_members (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    family_id INTEGER NOT NULL,
-    user_id INTEGER NOT NULL,
-    role TEXT NOT NULL DEFAULT 'member',
-    joined_at TEXT NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS family_invites (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    family_id INTEGER NOT NULL,
-    email TEXT NOT NULL,
-    token TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    accepted INTEGER DEFAULT 0
-  );
-  CREATE TABLE IF NOT EXISTS egg_entries (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    family_id INTEGER,
-    date TEXT NOT NULL,
-    count INTEGER NOT NULL,
-    note TEXT,
-    collector_ids TEXT,
-    egg_colors TEXT
-  );
-  CREATE TABLE IF NOT EXISTS chickens (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    family_id INTEGER,
-    name TEXT NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS collectors (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    family_id INTEGER,
-    name TEXT NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS settings (
-    key TEXT PRIMARY KEY,
-    value TEXT NOT NULL
-  );
-`);
+if (process.env.DATABASE_URL) {
+  // PostgreSQL via pg
+  isPostgres = true;
+  const pg = require("pg");
+  const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+  
+  // Auto-create tables
+  pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      email TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      marketing_consent INTEGER DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS families (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      owner_id INTEGER NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS family_members (
+      id SERIAL PRIMARY KEY,
+      family_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      role TEXT NOT NULL DEFAULT 'member',
+      joined_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS family_invites (
+      id SERIAL PRIMARY KEY,
+      family_id INTEGER NOT NULL,
+      email TEXT NOT NULL,
+      token TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      accepted INTEGER DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS egg_entries (
+      id SERIAL PRIMARY KEY,
+      family_id INTEGER,
+      date TEXT NOT NULL,
+      count INTEGER NOT NULL,
+      note TEXT,
+      collector_ids TEXT,
+      egg_colors TEXT
+    );
+    CREATE TABLE IF NOT EXISTS chickens (
+      id SERIAL PRIMARY KEY,
+      family_id INTEGER,
+      name TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS collectors (
+      id SERIAL PRIMARY KEY,
+      family_id INTEGER,
+      name TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+  `).catch((e: any) => console.error("DB init error:", e.message));
 
-// Migrations for existing DBs
-try { sqlite.exec(`ALTER TABLE egg_entries ADD COLUMN collector_ids TEXT`); } catch {}
-try { sqlite.exec(`ALTER TABLE egg_entries ADD COLUMN egg_colors TEXT`); } catch {}
-try { sqlite.exec(`ALTER TABLE egg_entries ADD COLUMN family_id INTEGER`); } catch {}
-try { sqlite.exec(`ALTER TABLE chickens ADD COLUMN family_id INTEGER`); } catch {}
-try { sqlite.exec(`ALTER TABLE collectors ADD COLUMN family_id INTEGER`); } catch {}
+  db = pool;
+  console.log("Using PostgreSQL database");
+} else {
+  // SQLite fallback for local dev
+  const Database = require("better-sqlite3");
+  const sqlite = new Database("data.db");
+  sqlite.pragma("journal_mode = WAL");
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      email TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      marketing_consent INTEGER DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS families (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      owner_id INTEGER NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS family_members (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      family_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      role TEXT NOT NULL DEFAULT 'member',
+      joined_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS family_invites (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      family_id INTEGER NOT NULL,
+      email TEXT NOT NULL,
+      token TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      accepted INTEGER DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS egg_entries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      family_id INTEGER,
+      date TEXT NOT NULL,
+      count INTEGER NOT NULL,
+      note TEXT,
+      collector_ids TEXT,
+      egg_colors TEXT
+    );
+    CREATE TABLE IF NOT EXISTS chickens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      family_id INTEGER,
+      name TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS collectors (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      family_id INTEGER,
+      name TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+  `);
+  db = sqlite;
+  console.log("Using SQLite database");
+}
 
-export const db = drizzle(sqlite);
+// ─── Universal query helpers ───
+
+async function query(sql: string, params: any[] = []): Promise<any[]> {
+  if (isPostgres) {
+    // Postgres uses $1, $2 params — convert ? placeholders
+    let idx = 0;
+    const pgSql = sql.replace(/\?/g, () => `$${++idx}`);
+    const result = await db.query(pgSql, params);
+    return result.rows;
+  } else {
+    return db.prepare(sql).all(...params);
+  }
+}
+
+async function queryOne(sql: string, params: any[] = []): Promise<any | undefined> {
+  if (isPostgres) {
+    let idx = 0;
+    const pgSql = sql.replace(/\?/g, () => `$${++idx}`);
+    const result = await db.query(pgSql, params);
+    return result.rows[0];
+  } else {
+    return db.prepare(sql).get(...params);
+  }
+}
+
+async function run(sql: string, params: any[] = []): Promise<void> {
+  if (isPostgres) {
+    let idx = 0;
+    const pgSql = sql.replace(/\?/g, () => `$${++idx}`);
+    await db.query(pgSql, params);
+  } else {
+    db.prepare(sql).run(...params);
+  }
+}
+
+async function insert(sql: string, params: any[] = []): Promise<any> {
+  if (isPostgres) {
+    let idx = 0;
+    const pgSql = sql.replace(/\?/g, () => `$${++idx}`) + " RETURNING *";
+    const result = await db.query(pgSql, params);
+    return result.rows[0];
+  } else {
+    const info = db.prepare(sql).run(...params);
+    // Return the inserted row by ID
+    const table = sql.match(/INSERT INTO (\w+)/i)?.[1];
+    if (table) return db.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(info.lastInsertRowid);
+    return { id: info.lastInsertRowid };
+  }
+}
+
+async function update(sql: string, params: any[] = []): Promise<any> {
+  if (isPostgres) {
+    let idx = 0;
+    const pgSql = sql.replace(/\?/g, () => `$${++idx}`) + " RETURNING *";
+    const result = await db.query(pgSql, params);
+    return result.rows[0];
+  } else {
+    db.prepare(sql).run(...params);
+    // Extract table and id from the WHERE clause
+    const table = sql.match(/UPDATE (\w+)/i)?.[1];
+    const id = params[params.length - 1]; // Assume last param is the WHERE id
+    if (table) return db.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(id);
+    return undefined;
+  }
+}
+
+// ─── Storage implementation ───
 
 export interface IStorage {
-  // Auth
   createUser(name: string, email: string, passwordHash: string, marketingConsent: boolean): Promise<User>;
   getUserByEmail(email: string): Promise<User | undefined>;
   getUserById(id: number): Promise<User | undefined>;
-  // Families
   createFamily(name: string, ownerId: number): Promise<Family>;
   getFamilyById(id: number): Promise<Family | undefined>;
   getUserFamilies(userId: number): Promise<{ family: Family; role: string }[]>;
   addFamilyMember(familyId: number, userId: number, role: string): Promise<FamilyMember>;
   getFamilyMembers(familyId: number): Promise<(FamilyMember & { userName?: string; userEmail?: string })[]>;
-  // Invites
   createInvite(familyId: number, email: string, token: string): Promise<FamilyInvite>;
   getInviteByToken(token: string): Promise<FamilyInvite | undefined>;
   getPendingInvites(familyId: number): Promise<FamilyInvite[]>;
   getPendingInvitesForEmail(email: string): Promise<FamilyInvite[]>;
   acceptInvite(id: number): Promise<void>;
-  // Egg entries (family-scoped)
   getEntriesByYear(familyId: number, year: number): Promise<EggEntry[]>;
   getEntryByDate(familyId: number, date: string): Promise<EggEntry | undefined>;
   createEntry(entry: InsertEggEntry): Promise<EggEntry>;
   updateEntry(id: number, entry: Partial<InsertEggEntry>): Promise<EggEntry | undefined>;
   deleteEntry(id: number): Promise<void>;
-  // Chickens (family-scoped)
   getChickens(familyId: number): Promise<Chicken[]>;
   createChicken(chicken: InsertChicken): Promise<Chicken>;
   deleteChicken(id: number): Promise<void>;
-  // Collectors (family-scoped)
   getCollectors(familyId: number): Promise<Collector[]>;
   createCollector(collector: InsertCollector): Promise<Collector>;
   deleteCollector(id: number): Promise<void>;
-  // Settings (family-scoped via key prefix)
   getSetting(key: string): Promise<string | undefined>;
   setSetting(key: string, value: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
-  // ─── Auth ───
   async createUser(name: string, email: string, passwordHash: string, marketingConsent: boolean): Promise<User> {
-    return db.insert(users).values({
-      name, email, passwordHash, createdAt: new Date().toISOString(),
-      marketingConsent: marketingConsent ? 1 : 0,
-    }).returning().get();
+    return insert("INSERT INTO users (name, email, password_hash, created_at, marketing_consent) VALUES (?, ?, ?, ?, ?)",
+      [name, email.toLowerCase(), passwordHash, new Date().toISOString(), marketingConsent ? 1 : 0]);
   }
   async getUserByEmail(email: string): Promise<User | undefined> {
-    return db.select().from(users).where(eq(users.email, email.toLowerCase())).get();
+    return queryOne("SELECT * FROM users WHERE email = ?", [email.toLowerCase()]);
   }
   async getUserById(id: number): Promise<User | undefined> {
-    return db.select().from(users).where(eq(users.id, id)).get();
+    return queryOne("SELECT * FROM users WHERE id = ?", [id]);
   }
-
-  // ─── Families ───
   async createFamily(name: string, ownerId: number): Promise<Family> {
-    return db.insert(families).values({ name, ownerId, createdAt: new Date().toISOString() }).returning().get();
+    return insert("INSERT INTO families (name, owner_id, created_at) VALUES (?, ?, ?)",
+      [name, ownerId, new Date().toISOString()]);
   }
   async getFamilyById(id: number): Promise<Family | undefined> {
-    return db.select().from(families).where(eq(families.id, id)).get();
+    return queryOne("SELECT * FROM families WHERE id = ?", [id]);
   }
   async getUserFamilies(userId: number): Promise<{ family: Family; role: string }[]> {
-    const memberships = db.select().from(familyMembers).where(eq(familyMembers.userId, userId)).all();
-    const result: { family: Family; role: string }[] = [];
+    const memberships = await query("SELECT * FROM family_members WHERE user_id = ?", [userId]);
+    const results: { family: Family; role: string }[] = [];
     for (const m of memberships) {
-      const fam = db.select().from(families).where(eq(families.id, m.familyId)).get();
-      if (fam) result.push({ family: fam, role: m.role });
+      const fam = await queryOne("SELECT * FROM families WHERE id = ?", [m.family_id]);
+      if (fam) results.push({ family: fam, role: m.role });
     }
-    return result;
+    return results;
   }
   async addFamilyMember(familyId: number, userId: number, role: string): Promise<FamilyMember> {
-    return db.insert(familyMembers).values({ familyId, userId, role, joinedAt: new Date().toISOString() }).returning().get();
+    return insert("INSERT INTO family_members (family_id, user_id, role, joined_at) VALUES (?, ?, ?, ?)",
+      [familyId, userId, role, new Date().toISOString()]);
   }
   async getFamilyMembers(familyId: number): Promise<(FamilyMember & { userName?: string; userEmail?: string })[]> {
-    const members = db.select().from(familyMembers).where(eq(familyMembers.familyId, familyId)).all();
-    return members.map(m => {
-      const user = db.select().from(users).where(eq(users.id, m.userId)).get();
-      return { ...m, userName: user?.name, userEmail: user?.email };
-    });
+    const members = await query("SELECT fm.*, u.name as user_name, u.email as user_email FROM family_members fm LEFT JOIN users u ON fm.user_id = u.id WHERE fm.family_id = ?", [familyId]);
+    return members.map((m: any) => ({ ...m, userName: m.user_name, userEmail: m.user_email }));
   }
-
-  // ─── Invites ───
   async createInvite(familyId: number, email: string, token: string): Promise<FamilyInvite> {
-    return db.insert(familyInvites).values({ familyId, email: email.toLowerCase(), token, createdAt: new Date().toISOString() }).returning().get();
+    return insert("INSERT INTO family_invites (family_id, email, token, created_at) VALUES (?, ?, ?, ?)",
+      [familyId, email.toLowerCase(), token, new Date().toISOString()]);
   }
   async getInviteByToken(token: string): Promise<FamilyInvite | undefined> {
-    return db.select().from(familyInvites).where(eq(familyInvites.token, token)).get();
+    return queryOne("SELECT * FROM family_invites WHERE token = ?", [token]);
   }
   async getPendingInvites(familyId: number): Promise<FamilyInvite[]> {
-    return db.select().from(familyInvites).where(and(eq(familyInvites.familyId, familyId), eq(familyInvites.accepted, 0))).all();
+    return query("SELECT * FROM family_invites WHERE family_id = ? AND accepted = 0", [familyId]);
   }
   async getPendingInvitesForEmail(email: string): Promise<FamilyInvite[]> {
-    return db.select().from(familyInvites).where(and(eq(familyInvites.email, email.toLowerCase()), eq(familyInvites.accepted, 0))).all();
+    return query("SELECT * FROM family_invites WHERE email = ? AND accepted = 0", [email.toLowerCase()]);
   }
   async acceptInvite(id: number): Promise<void> {
-    db.update(familyInvites).set({ accepted: 1 }).where(eq(familyInvites.id, id)).run();
+    await run("UPDATE family_invites SET accepted = 1 WHERE id = ?", [id]);
   }
-
-  // ─── Entries (family-scoped) ───
   async getEntriesByYear(familyId: number, year: number): Promise<EggEntry[]> {
-    return db.select().from(eggEntries)
-      .where(and(eq(eggEntries.familyId, familyId), gte(eggEntries.date, `${year}-01-01`), lte(eggEntries.date, `${year}-12-31`)))
-      .orderBy(desc(eggEntries.date)).all();
+    return query("SELECT * FROM egg_entries WHERE family_id = ? AND date >= ? AND date <= ? ORDER BY date DESC",
+      [familyId, `${year}-01-01`, `${year}-12-31`]);
   }
   async getEntryByDate(familyId: number, date: string): Promise<EggEntry | undefined> {
-    return db.select().from(eggEntries).where(and(eq(eggEntries.familyId, familyId), eq(eggEntries.date, date))).get();
+    return queryOne("SELECT * FROM egg_entries WHERE family_id = ? AND date = ?", [familyId, date]);
   }
   async createEntry(entry: InsertEggEntry): Promise<EggEntry> {
-    return db.insert(eggEntries).values(entry).returning().get();
+    return insert("INSERT INTO egg_entries (family_id, date, count, note, collector_ids, egg_colors) VALUES (?, ?, ?, ?, ?, ?)",
+      [entry.familyId, entry.date, entry.count, entry.note || null, entry.collectorIds || null, entry.eggColors || null]);
   }
   async updateEntry(id: number, entry: Partial<InsertEggEntry>): Promise<EggEntry | undefined> {
-    return db.update(eggEntries).set(entry).where(eq(eggEntries.id, id)).returning().get();
+    const fields: string[] = [];
+    const vals: any[] = [];
+    if (entry.count !== undefined) { fields.push("count = ?"); vals.push(entry.count); }
+    if (entry.date !== undefined) { fields.push("date = ?"); vals.push(entry.date); }
+    if (entry.collectorIds !== undefined) { fields.push("collector_ids = ?"); vals.push(entry.collectorIds); }
+    if (entry.eggColors !== undefined) { fields.push("egg_colors = ?"); vals.push(entry.eggColors); }
+    if (entry.note !== undefined) { fields.push("note = ?"); vals.push(entry.note); }
+    if (fields.length === 0) return queryOne("SELECT * FROM egg_entries WHERE id = ?", [id]);
+    vals.push(id);
+    return update(`UPDATE egg_entries SET ${fields.join(", ")} WHERE id = ?`, vals);
   }
   async deleteEntry(id: number): Promise<void> {
-    db.delete(eggEntries).where(eq(eggEntries.id, id)).run();
+    await run("DELETE FROM egg_entries WHERE id = ?", [id]);
   }
-
-  // ─── Chickens (family-scoped) ───
   async getChickens(familyId: number): Promise<Chicken[]> {
-    return db.select().from(chickens).where(eq(chickens.familyId, familyId)).all();
+    return query("SELECT * FROM chickens WHERE family_id = ?", [familyId]);
   }
   async createChicken(chicken: InsertChicken): Promise<Chicken> {
-    return db.insert(chickens).values(chicken).returning().get();
+    return insert("INSERT INTO chickens (family_id, name) VALUES (?, ?)", [chicken.familyId, chicken.name]);
   }
   async deleteChicken(id: number): Promise<void> {
-    db.delete(chickens).where(eq(chickens.id, id)).run();
+    await run("DELETE FROM chickens WHERE id = ?", [id]);
   }
-
-  // ─── Collectors (family-scoped) ───
   async getCollectors(familyId: number): Promise<Collector[]> {
-    return db.select().from(collectors).where(eq(collectors.familyId, familyId)).all();
+    return query("SELECT * FROM collectors WHERE family_id = ?", [familyId]);
   }
   async createCollector(collector: InsertCollector): Promise<Collector> {
-    return db.insert(collectors).values(collector).returning().get();
+    return insert("INSERT INTO collectors (family_id, name) VALUES (?, ?)", [collector.familyId, collector.name]);
   }
   async deleteCollector(id: number): Promise<void> {
-    db.delete(collectors).where(eq(collectors.id, id)).run();
+    await run("DELETE FROM collectors WHERE id = ?", [id]);
   }
-
-  // ─── Settings ───
   async getSetting(key: string): Promise<string | undefined> {
-    const row = db.select().from(settings).where(eq(settings.key, key)).get();
+    const row = await queryOne("SELECT * FROM settings WHERE key = ?", [key]);
     return row?.value;
   }
   async setSetting(key: string, value: string): Promise<void> {
-    db.delete(settings).where(eq(settings.key, key)).run();
-    db.insert(settings).values({ key, value }).run();
+    await run("DELETE FROM settings WHERE key = ?", [key]);
+    await insert("INSERT INTO settings (key, value) VALUES (?, ?)", [key, value]);
   }
 }
 

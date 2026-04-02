@@ -51,7 +51,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const user = await storage.getUserByEmail(parsed.data.email.toLowerCase());
       if (!user) { res.status(401).json({ message: "Invalid email or password" }); return; }
 
-      const valid = await bcrypt.compare(parsed.data.password, user.passwordHash);
+      const valid = await bcrypt.compare(parsed.data.password, user.password_hash || user.passwordHash);
       if (!valid) { res.status(401).json({ message: "Invalid email or password" }); return; }
 
       // Get user's families

@@ -77,7 +77,21 @@ if (process.env.DATABASE_URL) {
 } else {
   // SQLite fallback for local dev
   const Database = require("better-sqlite3");
-  const sqlite = new Database("data.db");
+  const fs = require("fs");
+  const path = require("path");
+  // Use Railway volume if available, otherwise local
+  const volMount = process.env.RAILWAY_VOLUME_MOUNT_PATH;
+  let dbPath = "data.db";
+  if (volMount && fs.existsSync(volMount)) {
+    dbPath = path.join(volMount, "data.db");
+    console.log(`Database: using Railway volume at ${dbPath}`);
+  } else if (fs.existsSync("/app/data")) {
+    dbPath = "/app/data/data.db";
+    console.log(`Database: using /app/data volume at ${dbPath}`);
+  } else {
+    console.log("Database: using local data.db");
+  }
+  const sqlite = new Database(dbPath);
   sqlite.pragma("journal_mode = WAL");
   sqlite.exec(`
     CREATE TABLE IF NOT EXISTS users (

@@ -2,6 +2,24 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
 const API_BASE = "__PORT_5000__".startsWith("__") ? "" : "__PORT_5000__";
 
+// Auth token storage (in memory — also persisted in cookie by the server)
+let authToken: string | null = null;
+
+export function setAuthToken(token: string | null) {
+  authToken = token;
+}
+
+export function getAuthToken(): string | null {
+  return authToken;
+}
+
+function getHeaders(data?: unknown): Record<string, string> {
+  const headers: Record<string, string> = {};
+  if (data) headers["Content-Type"] = "application/json";
+  if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
+  return headers;
+}
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
@@ -16,8 +34,9 @@ export async function apiRequest(
 ): Promise<Response> {
   const res = await fetch(`${API_BASE}${url}`, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers: getHeaders(data),
     body: data ? JSON.stringify(data) : undefined,
+    credentials: "include",
   });
 
   await throwIfResNotOk(res);
@@ -30,7 +49,10 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const res = await fetch(`${API_BASE}${queryKey.join("/")}`);
+    const res = await fetch(`${API_BASE}${queryKey[0]}`, {
+      headers: getHeaders(),
+      credentials: "include",
+    });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
       return null;

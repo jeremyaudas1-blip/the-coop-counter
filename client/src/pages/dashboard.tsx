@@ -6,11 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { format, parseISO, eachMonthOfInterval, startOfYear, endOfYear, differenceInDays, startOfWeek, endOfWeek, isWithinInterval, getISOWeek, subDays, isEqual, startOfDay } from "date-fns";
-import { Plus, Minus, Trash2, Sun, Moon, X } from "lucide-react";
+import { Plus, Minus, Trash2, Sun, Moon, X, LogOut, UserPlus } from "lucide-react";
 import { EggBasket } from "@/components/EggBasket";
 import { EggStackChart } from "@/components/EggStackChart";
 import { WeatherBadge } from "@/components/WeatherBadge";
 import { playEggLogged, playPlus, playMinus, playClick, playToggle } from "@/lib/sounds";
+import { useAuth } from "@/lib/auth";
 
 interface EggEntry { id: number; date: string; count: number; note?: string | null; collectorIds?: string | null; eggColors?: string | null; }
 interface Chicken { id: number; name: string; }
@@ -179,6 +180,7 @@ function EggColorRainbow({ entries }: { entries: EggEntry[] }) {
 // ─── Main ───
 export default function Dashboard() {
   const { toast } = useToast();
+  const { user, family, logout } = useAuth();
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [eggCount, setEggCount] = useState("");
@@ -190,6 +192,28 @@ export default function Dashboard() {
   const [showManageChickens, setShowManageChickens] = useState(false);
   const [collectorName, setCollectorName] = useState("");
   const [showManageCollectors, setShowManageCollectors] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [showFamilySettings, setShowFamilySettings] = useState(false);
+
+  // Family members & invites
+  const { data: familyMembers = [] } = useQuery<any[]>({
+    queryKey: ["/api/family/members"],
+    queryFn: async () => { const r = await apiRequest("GET", "/api/family/members"); return r.json(); },
+  });
+  const { data: pendingInvites = [] } = useQuery<any[]>({
+    queryKey: ["/api/family/invites"],
+    queryFn: async () => { const r = await apiRequest("GET", "/api/family/invites"); return r.json(); },
+  });
+  const inviteMutation = useMutation({
+    mutationFn: async (email: string) => { const r = await apiRequest("POST", "/api/family/invite", { email }); return r.json(); },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/family/members"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/family/invites"] });
+      setInviteEmail("");
+      toast({ title: data.autoAdded ? "👥 Member added!" : "📧 Invite sent!", description: data.message });
+    },
+    onError: () => { toast({ title: "Oops!", description: "Failed to send invite.", variant: "destructive" }); },
+  });
 
   // ─── Queries ───
   const { data: entries = [], isLoading } = useQuery<EggEntry[]>({
@@ -336,11 +360,15 @@ export default function Dashboard() {
             <div className="hidden sm:block"><WeatherBadge /></div>
           </div>
           <div className="flex items-center gap-2">
+            {family && <span className="text-xs text-muted-foreground hidden sm:inline">🏠 {family.name}</span>}
             <select value={selectedYear} onChange={(e) => { setSelectedYear(parseInt(e.target.value)); playClick(); }}
               className="text-sm bg-muted border border-border rounded-md px-2 py-1.5 font-medium" data-testid="year-selector">
               {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
             </select>
             <ThemeToggle />
+            <Button size="icon" variant="ghost" onClick={logout} title="Log out" data-testid="button-logout">
+              <LogOut className="w-4 h-4" />
+            </Button>
           </div>
         </div>
         <div className="sm:hidden max-w-6xl mx-auto px-4 pb-2"><WeatherBadge /></div>
@@ -680,6 +708,56 @@ export default function Dashboard() {
                 <Input placeholder="Chicken name..." value={chickenName} onChange={(e) => setChickenName(e.target.value)} className="flex-1" />
                 <Button type="submit" size="sm" disabled={!chickenName.trim()}><Plus className="w-4 h-4 mr-1" /> Add</Button>
               </form>
+            )}
+          </CardContent>
+        </Card>
+        {/* Family Management */}
+        <Card data-testid="family-management">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-semibold">🏠 {family?.name || "Your Family"}</CardTitle>
+              <Button variant="ghost" size="sm" onClick={() => setShowFamilySettings(!showFamilySettings)}>
+                {showFamilySettings ? "Hide" : "Manage"}
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {/* Current members */}
+            <div className="flex flex-wrap gap-2 mb-3">
+              {familyMembers.map((m: any) => (
+                <span key={m.id} className="inline-flex items-center gap-1.5 bg-muted rounded-full px-3 py-1 text-sm font-medium">
+                  {m.role === "owner" ? "👑" : "👤"} {m.userName || "Member"}
+                  <span className="text-[10px] text-muted-foreground">{m.role}</span>
+                </span>
+              ))}
+            </div>
+
+            {showFamilySettings && (
+              <div className="space-y-3 mt-3">
+                {/* Invite form */}
+                <form onSubmit={(e) => { e.preventDefault(); if (inviteEmail.trim()) inviteMutation.mutate(inviteEmail.trim()); }} className="flex gap-2">
+                  <Input type="email" placeholder="Family member's email..." value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)} className="flex-1" data-testid="input-invite-email" />
+                  <Button type="submit" size="sm" disabled={!inviteEmail.trim() || inviteMutation.isPending}>
+                    <UserPlus className="w-4 h-4 mr-1" /> Invite
+                  </Button>
+                </form>
+
+                {/* Pending invites */}
+                {pendingInvites.length > 0 && (
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground mb-1">⏳ Pending invites</p>
+                    {pendingInvites.map((inv: any) => (
+                      <p key={inv.id} className="text-xs text-muted-foreground">📧 {inv.email}</p>
+                    ))}
+                  </div>
+                )}
+
+                <p className="text-[10px] text-muted-foreground">
+                  Invited members will join your coop when they sign up with that email.
+                  Everyone in the family shares the same eggs, chickens, and leaderboard.
+                </p>
+              </div>
             )}
           </CardContent>
         </Card>

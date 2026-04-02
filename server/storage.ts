@@ -18,7 +18,8 @@ sqlite.exec(`
     date TEXT NOT NULL,
     count INTEGER NOT NULL,
     note TEXT,
-    collector_ids TEXT
+    collector_ids TEXT,
+    egg_colors TEXT
   );
   CREATE UNIQUE INDEX IF NOT EXISTS idx_egg_entries_date ON egg_entries(date);
   CREATE TABLE IF NOT EXISTS chickens (
@@ -35,10 +36,9 @@ sqlite.exec(`
   );
 `);
 
-// Migrate: add collector_ids column if it doesn't exist on older DBs
-try {
-  sqlite.exec(`ALTER TABLE egg_entries ADD COLUMN collector_ids TEXT`);
-} catch { /* column already exists */ }
+// Migrate: add columns if they don't exist on older DBs
+try { sqlite.exec(`ALTER TABLE egg_entries ADD COLUMN collector_ids TEXT`); } catch { /* exists */ }
+try { sqlite.exec(`ALTER TABLE egg_entries ADD COLUMN egg_colors TEXT`); } catch { /* exists */ }
 
 export const db = drizzle(sqlite);
 

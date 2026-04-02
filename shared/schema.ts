@@ -8,6 +8,7 @@ export const eggEntries = sqliteTable("egg_entries", {
   count: integer("count").notNull(),
   note: text("note"),
   collectorIds: text("collector_ids"), // JSON array of collector IDs e.g. "[1,3]"
+  eggColors: text("egg_colors"), // JSON object e.g. {"white":3,"brown":2,"blue":1}
 });
 
 export const chickens = sqliteTable("chickens", {
@@ -31,6 +32,7 @@ export const insertEggEntrySchema = createInsertSchema(eggEntries).omit({
   count: z.number().min(0).max(100),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   collectorIds: z.string().optional().nullable(),
+  eggColors: z.string().optional().nullable(),
 });
 
 export const insertChickenSchema = createInsertSchema(chickens).omit({

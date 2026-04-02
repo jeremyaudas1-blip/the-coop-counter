@@ -12,7 +12,12 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import Database from "better-sqlite3";
 import { eq, desc, and, gte, lte } from "drizzle-orm";
 
-const sqlite = new Database("data.db");
+// Use persistent volume path on Railway, fallback to local for dev
+const DB_PATH = process.env.NODE_ENV === "production" && process.env.RAILWAY_ENVIRONMENT
+  ? "/app/data/data.db"
+  : "data.db";
+
+const sqlite = new Database(DB_PATH);
 sqlite.pragma("journal_mode = WAL");
 
 // Auto-create tables

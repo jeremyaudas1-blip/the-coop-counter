@@ -209,8 +209,10 @@ export interface IStorage {
   createUser(name: string, email: string, passwordHash: string, marketingConsent: boolean): Promise<User>;
   getUserByEmail(email: string): Promise<User | undefined>;
   getUserById(id: number): Promise<User | undefined>;
+  updateUserName(id: number, name: string): Promise<void>;
   createFamily(name: string, ownerId: number): Promise<Family>;
   getFamilyById(id: number): Promise<Family | undefined>;
+  updateFamilyName(id: number, name: string): Promise<void>;
   getUserFamilies(userId: number): Promise<{ family: Family; role: string }[]>;
   addFamilyMember(familyId: number, userId: number, role: string): Promise<FamilyMember>;
   getFamilyMembers(familyId: number): Promise<(FamilyMember & { userName?: string; userEmail?: string })[]>;
@@ -245,12 +247,18 @@ export class DatabaseStorage implements IStorage {
   async getUserById(id: number): Promise<User | undefined> {
     return queryOne("SELECT * FROM users WHERE id = ?", [id]);
   }
+  async updateUserName(id: number, name: string): Promise<void> {
+    await run("UPDATE users SET name = ? WHERE id = ?", [name, id]);
+  }
   async createFamily(name: string, ownerId: number): Promise<Family> {
     return insert("INSERT INTO families (name, owner_id, created_at) VALUES (?, ?, ?)",
       [name, ownerId, new Date().toISOString()]);
   }
   async getFamilyById(id: number): Promise<Family | undefined> {
     return queryOne("SELECT * FROM families WHERE id = ?", [id]);
+  }
+  async updateFamilyName(id: number, name: string): Promise<void> {
+    await run("UPDATE families SET name = ? WHERE id = ?", [name, id]);
   }
   async getUserFamilies(userId: number): Promise<{ family: Family; role: string }[]> {
     const memberships = await query("SELECT * FROM family_members WHERE user_id = ?", [userId]);

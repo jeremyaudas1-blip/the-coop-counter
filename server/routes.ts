@@ -107,6 +107,30 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ─── Profile & Settings ───
+
+  app.patch("/api/auth/profile", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { name } = req.body;
+      if (name && typeof name === "string" && name.trim()) {
+        await storage.updateUserName(req.userId!, name.trim());
+      }
+      const user = await storage.getUserById(req.userId!);
+      res.json({ user: { id: user!.id, name: user!.name, email: user!.email } });
+    } catch { res.status(500).json({ message: "Failed" }); }
+  });
+
+  app.patch("/api/family", authMiddleware, async (req: AuthRequest, res) => {
+    try {
+      const { name } = req.body;
+      if (name && typeof name === "string" && name.trim()) {
+        await storage.updateFamilyName(req.familyId!, name.trim());
+      }
+      const family = await storage.getFamilyById(req.familyId!);
+      res.json(family);
+    } catch { res.status(500).json({ message: "Failed" }); }
+  });
+
   // ─── Family Management (auth required) ───
 
   app.get("/api/family/members", authMiddleware, async (req: AuthRequest, res) => {

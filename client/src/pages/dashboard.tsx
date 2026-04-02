@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { format, parseISO, eachMonthOfInterval, startOfYear, endOfYear, differenceInDays, startOfWeek, endOfWeek, isWithinInterval, getISOWeek, subDays, isEqual, startOfDay } from "date-fns";
-import { Plus, Minus, Trash2, Sun, Moon, X, LogOut, UserPlus } from "lucide-react";
+import { Plus, Minus, Trash2, Sun, Moon, X, LogOut, UserPlus, Settings, Pencil, Check } from "lucide-react";
 import { EggBasket } from "@/components/EggBasket";
 import { EggStackChart } from "@/components/EggStackChart";
 import { WeatherBadge } from "@/components/WeatherBadge";
@@ -279,6 +279,10 @@ export default function Dashboard() {
   const [showManageCollectors, setShowManageCollectors] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [showFamilySettings, setShowFamilySettings] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [editCoopName, setEditCoopName] = useState("");
+  const [editUserName, setEditUserName] = useState("");
+  const [isEditingCoopName, setIsEditingCoopName] = useState(false);
 
   // Family members & invites
   const { data: familyMembers = [] } = useQuery<any[]>({
@@ -459,7 +463,38 @@ export default function Dashboard() {
         <div className="sm:hidden max-w-6xl mx-auto px-4 pb-2"><WeatherBadge /></div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+      {/* Coop Name Banner */}
+      <div className="max-w-6xl mx-auto px-4 pt-5 pb-1">
+        <div className="flex items-center gap-2">
+          {isEditingCoopName ? (
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              if (editCoopName.trim()) {
+                await apiRequest("PATCH", "/api/family", { name: editCoopName.trim() });
+                queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+                // Update local state
+                if (family) family.name = editCoopName.trim();
+              }
+              setIsEditingCoopName(false);
+            }} className="flex items-center gap-2">
+              <Input value={editCoopName} onChange={(e) => setEditCoopName(e.target.value)}
+                className="text-xl font-bold h-auto py-1 px-2 w-64" autoFocus data-testid="input-edit-coop-name" />
+              <Button type="submit" size="icon" variant="ghost"><Check className="w-4 h-4" /></Button>
+              <Button type="button" size="icon" variant="ghost" onClick={() => setIsEditingCoopName(false)}><X className="w-4 h-4" /></Button>
+            </form>
+          ) : (
+            <>
+              <h2 className="text-xl font-bold">{family?.name || "My Coop"}</h2>
+              <Button size="icon" variant="ghost" className="opacity-50 hover:opacity-100" onClick={() => {
+                setEditCoopName(family?.name || ""); setIsEditingCoopName(true);
+              }} data-testid="button-edit-coop-name"><Pencil className="w-3.5 h-3.5" /></Button>
+            </>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground mt-0.5">Welcome back, {user?.name} 👋</p>
+      </div>
+
+      <main className="max-w-6xl mx-auto px-4 pb-6 space-y-6">
         {/* Egg Input Form */}
         <Card data-testid="egg-input-card">
           <CardContent className="pt-6">
@@ -796,6 +831,60 @@ export default function Dashboard() {
             )}
           </CardContent>
         </Card>
+        {/* Settings */}
+        <Card data-testid="settings">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-semibold">⚙️ Settings</CardTitle>
+              <Button variant="ghost" size="sm" onClick={() => setShowSettings(!showSettings)}>
+                {showSettings ? "Hide" : "Show"}
+              </Button>
+            </div>
+          </CardHeader>
+          {showSettings && (
+            <CardContent className="space-y-4">
+              <div>
+                <label className="text-sm font-medium text-muted-foreground mb-1 block">👤 Your Name</label>
+                <form onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (editUserName.trim()) {
+                    await apiRequest("PATCH", "/api/auth/profile", { name: editUserName.trim() });
+                    queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+                    if (user) user.name = editUserName.trim();
+                    toast({ title: "✅ Name updated!" });
+                  }
+                }} className="flex gap-2">
+                  <Input value={editUserName || user?.name || ""} onChange={(e) => setEditUserName(e.target.value)}
+                    placeholder="Your name" className="flex-1" data-testid="input-edit-name" />
+                  <Button type="submit" size="sm" disabled={!editUserName.trim() || editUserName.trim() === user?.name}>Save</Button>
+                </form>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-muted-foreground mb-1 block">📧 Email</label>
+                <p className="text-sm text-foreground">{user?.email}</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Email can't be changed yet</p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-muted-foreground mb-1 block">🐔 Coop Name</label>
+                <form onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (editCoopName.trim()) {
+                    await apiRequest("PATCH", "/api/family", { name: editCoopName.trim() });
+                    queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+                    if (family) family.name = editCoopName.trim();
+                    setIsEditingCoopName(false);
+                    toast({ title: "✅ Coop name updated!" });
+                  }
+                }} className="flex gap-2">
+                  <Input value={editCoopName || family?.name || ""} onChange={(e) => setEditCoopName(e.target.value)}
+                    placeholder="Coop name" className="flex-1" data-testid="input-settings-coop-name" />
+                  <Button type="submit" size="sm" disabled={!editCoopName.trim() || editCoopName.trim() === family?.name}>Save</Button>
+                </form>
+              </div>
+            </CardContent>
+          )}
+        </Card>
+
         {/* Family Management */}
         <Card data-testid="family-management">
           <CardHeader className="pb-2">

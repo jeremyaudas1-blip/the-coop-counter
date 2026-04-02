@@ -12,10 +12,11 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import Database from "better-sqlite3";
 import { eq, desc, and, gte, lte } from "drizzle-orm";
 
-// Use persistent volume path on Railway, fallback to local for dev
-const DB_PATH = process.env.NODE_ENV === "production" && process.env.RAILWAY_ENVIRONMENT
-  ? "/app/data/data.db"
-  : "data.db";
+// Database path — uses /app/data/ if the directory exists (Railway volume), otherwise local
+import fs from "fs";
+import path from "path";
+const VOLUME_PATH = "/app/data";
+const DB_PATH = fs.existsSync(VOLUME_PATH) ? path.join(VOLUME_PATH, "data.db") : "data.db";
 
 const sqlite = new Database(DB_PATH);
 sqlite.pragma("journal_mode = WAL");

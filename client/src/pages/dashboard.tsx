@@ -132,7 +132,23 @@ function ThemeToggle() {
   );
 }
 
-// ─── Egg color rainbow viz ───
+// ─── Egg color nest viz ───
+// Nest positions for eggs — arranged in a natural pile inside a nest shape
+const NEST_EGG_SLOTS: [number, number][] = [
+  // Bottom row
+  [55, 145], [80, 148], [105, 146], [130, 148], [155, 145],
+  // Row 2
+  [65, 128], [92, 125], [118, 125], [145, 128],
+  // Row 3
+  [55, 110], [82, 107], [110, 105], [138, 107], [158, 110],
+  // Row 4
+  [70, 92], [98, 88], [125, 88], [150, 92],
+  // Row 5
+  [60, 75], [88, 72], [115, 70], [140, 72], [160, 75],
+  // Top overflow
+  [75, 58], [105, 55], [132, 58],
+];
+
 function EggColorRainbow({ entries }: { entries: EggEntry[] }) {
   const colorTotals = useMemo(() => {
     const totals: Record<string, number> = {};
@@ -147,6 +163,33 @@ function EggColorRainbow({ entries }: { entries: EggEntry[] }) {
   }, [entries]);
 
   const total = Object.values(colorTotals).reduce((s, v) => s + v, 0);
+
+  // Build a list of individual eggs with their colors, proportional to totals
+  // Must call useMemo unconditionally (React hooks rules)
+  const nestEggs = useMemo(() => {
+    if (total === 0) return [];
+    const eggs: { color: string; border: string; label: string }[] = [];
+    // Scale so max eggs fill the nest
+    const maxSlots = NEST_EGG_SLOTS.length;
+    const scale = total > maxSlots ? maxSlots / total : 1;
+
+    EGG_COLOR_OPTIONS.forEach(opt => {
+      const count = colorTotals[opt.key] || 0;
+      if (count === 0) return;
+      const scaledCount = Math.max(1, Math.round(count * scale));
+      for (let i = 0; i < scaledCount && eggs.length < maxSlots; i++) {
+        eggs.push({ color: opt.color, border: opt.border, label: opt.label });
+      }
+    });
+
+    // Shuffle deterministically for a natural mixed look
+    for (let i = eggs.length - 1; i > 0; i--) {
+      const j = (i * 7 + 3) % (i + 1);
+      [eggs[i], eggs[j]] = [eggs[j], eggs[i]];
+    }
+    return eggs;
+  }, [colorTotals, total]);
+
   if (total === 0) return (
     <div className="text-center py-4 text-muted-foreground">
       <p className="text-2xl mb-2">🌈</p>
@@ -155,16 +198,57 @@ function EggColorRainbow({ entries }: { entries: EggEntry[] }) {
   );
 
   return (
-    <div className="space-y-2">
-      {/* Rainbow bar */}
-      <div className="flex h-6 rounded-full overflow-hidden">
-        {EGG_COLOR_OPTIONS.filter(c => (colorTotals[c.key] || 0) > 0).map(c => (
-          <div key={c.key} style={{ width: `${((colorTotals[c.key] || 0) / total) * 100}%`, backgroundColor: c.color }}
-            className="transition-all duration-500" title={`${c.label}: ${colorTotals[c.key]}`} />
+    <div className="flex flex-col items-center">
+      <svg viewBox="0 0 215 185" className="w-full max-w-[280px] h-auto">
+        {/* Nest body — woven straw look */}
+        <ellipse cx="108" cy="140" rx="75" ry="35" fill="hsl(var(--muted))" stroke="hsl(var(--border))" strokeWidth="1.5" />
+        {/* Straw texture lines */}
+        {[125, 135, 145, 155].map((y, i) => {
+          const shrink = Math.abs(y - 140) * 1.2;
+          return <line key={i} x1={40 + shrink} y1={y} x2={176 - shrink} y2={y}
+            stroke="hsl(var(--border))" strokeWidth="1" opacity="0.5" />;
+        })}
+        {[60, 80, 108, 136, 156].map((x, i) => (
+          <line key={`v${i}`} x1={x} y1={110} x2={x + (x > 108 ? 3 : -3)} y2={165}
+            stroke="hsl(var(--border))" strokeWidth="0.8" opacity="0.35" />
         ))}
-      </div>
-      {/* Legend */}
-      <div className="flex flex-wrap gap-x-4 gap-y-1 justify-center">
+
+        {/* Colored eggs */}
+        {nestEggs.map((egg, i) => {
+          if (i >= NEST_EGG_SLOTS.length) return null;
+          const [cx, cy] = NEST_EGG_SLOTS[i];
+          const rotation = ((i * 23 + 7) % 30) - 15;
+          const rx = 10 + (i % 3) * 0.5;
+          const ry = 12.5 + (i % 2) * 0.5;
+          return (
+            <g key={i} transform={`rotate(${rotation}, ${cx}, ${cy})`}>
+              <ellipse cx={cx} cy={cy} rx={rx} ry={ry}
+                fill={egg.color} stroke={egg.border} strokeWidth="0.8">
+                <animate attributeName="opacity" from="0" to="1" dur="0.3s"
+                  begin={`${i * 0.04}s`} fill="freeze" />
+              </ellipse>
+              {/* Highlight */}
+              <ellipse cx={cx - 2} cy={cy - 3} rx={rx * 0.35} ry={ry * 0.3}
+                fill="white" opacity="0.3" />
+              {/* Speckle dots for speckled eggs */}
+              {egg.label === "Speckled" && (
+                <>
+                  <circle cx={cx - 3} cy={cy - 1} r="1" fill="#8B7355" opacity="0.5" />
+                  <circle cx={cx + 2} cy={cy + 2} r="0.8" fill="#8B7355" opacity="0.4" />
+                  <circle cx={cx + 1} cy={cy - 4} r="0.6" fill="#8B7355" opacity="0.4" />
+                </>
+              )}
+            </g>
+          );
+        })}
+
+        {/* Nest rim — front */}
+        <path d="M30,130 Q30,110 108,105 Q186,110 186,130"
+          fill="none" stroke="hsl(var(--foreground))" strokeWidth="2.5" opacity="0.2" strokeLinecap="round" />
+      </svg>
+
+      {/* Legend below */}
+      <div className="flex flex-wrap gap-x-4 gap-y-1 justify-center mt-2">
         {EGG_COLOR_OPTIONS.filter(c => (colorTotals[c.key] || 0) > 0).map(c => (
           <div key={c.key} className="flex items-center gap-1.5 text-xs">
             <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: c.color, border: `1px solid ${c.border}` }} />
@@ -173,6 +257,7 @@ function EggColorRainbow({ entries }: { entries: EggEntry[] }) {
           </div>
         ))}
       </div>
+      <p className="text-xs text-muted-foreground mt-1 tabular-nums">{total} colored eggs total</p>
     </div>
   );
 }

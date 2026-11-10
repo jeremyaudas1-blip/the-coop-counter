@@ -72,3 +72,13 @@ App runs at **http://localhost:5000**
 - **Backend**: Express.js + SQLite (via Drizzle ORM)
 - **Weather**: Open-Meteo API (free, no key needed)
 - **Built with**: [Perplexity Computer](https://www.perplexity.ai/computer)
+
+## Deploy to Netlify (free plan) — `netlify` branch
+
+This branch runs on Netlify with no separate server or database:
+
+- The API runs as one Netlify Function (`netlify/functions/api.mts`, served at `/api/*`).
+- Data (accounts, families, egg logs, chickens, collectors, settings) is stored in Netlify Blobs (`server/storage-blobs.ts`).
+- The login signing secret is generated automatically on first use; set a `JWT_SECRET` environment variable in Netlify to override it.
+
+In Netlify: link this repo to the site, set the branch to deploy to `netlify`, and Netlify reads `netlify.toml` for the build.
